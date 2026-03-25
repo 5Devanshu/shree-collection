@@ -1,0 +1,55 @@
+.btn {
+  padding: var(--spacing-4) var(--spacing-8);
+  border-radius: var(--radius-none);
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-sans);
+}
+
+/* Primary: Gradient-filled (Gold), Uppercase Manrope text */
+.btn-primary {
+  background: linear-gradient(45deg, var(--primary), var(--primary-container));
+  color: var(--on-primary, #ffffff);
+}
+.btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+/* Secondary: Transparent background, 1px "Ghost Border" at 20% opacity */
+.btn-secondary {
+  background: transparent;
+  color: var(--on-surface);
+  border: 1px solid rgba(208, 197, 175, 0.2); /* outline-variant at 20% */
+}
+.btn-secondary:hover {
+  border-color: rgba(208, 197, 175, 0.5);
+  background: var(--surface-container-highest);
+}
+
+/* Tertiary/Text: No border, underlined on hover with a 1px Gold line */
+.btn-tertiary {
+  background: transparent;
+  color: var(--on-surface);
+  padding: var(--spacing-2) var(--spacing-4);
+  position: relative;
+}
+.btn-tertiary::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background-color: var(--primary);
+  transform: scaleX(0);
+  transition: transform 0.3s ease;
+  transform-origin: right;
+}
+.btn-tertiary:hover::after {
+  transform: scaleX(1);
+  transform-origin: left;
+}

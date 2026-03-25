@@ -1,0 +1,90 @@
+:root {
+  /* Core Colors */
+  --primary: #735c00;
+  --primary-container: #d4af37;
+  --surface: #f9f9f9;
+  --surface-container-low: #f3f3f4;
+  --surface-container-highest: #e2e2e2;
+  --surface-container-lowest: #ffffff;
+  --on-surface: #1a1c1c;
+  --on-error: #ba1a1a;
+  --outline: #7f7663;
+  --outline-variant: #d0c5af;
+
+  /* Typography */
+  --font-display: 'Noto Serif', serif;
+  --font-sans: 'Manrope', sans-serif;
+
+  /* Spacing Scale */
+  --spacing-2: 0.5rem;
+  --spacing-4: 1rem;
+  --spacing-6: 1.5rem;
+  --spacing-8: 2rem;
+  --spacing-12: 4rem;
+  --spacing-16: 5.5rem;
+  --spacing-24: 8rem;
+  
+  /* Borders */
+  --radius-none: 0px;
+}
+
+/* Reset & Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--surface);
+  color: var(--on-surface);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1.1;
+  color: var(--on-surface);
+}
+
+.display-lg {
+  font-size: 3.5rem;
+  letter-spacing: -0.02em;
+}
+
+.headline-md {
+  font-size: 1.75rem;
+  letter-spacing: -0.02em;
+}
+
+.body-lg {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  font-weight: 300;
+}
+
+.label-md {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 500;
+}
+
+/* Utilities */
+.glass-gold {
+  background-color: rgba(249, 249, 249, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.ambient-shadow {
+  box-shadow: 0 20px 40px rgba(26, 28, 28, 0.04);
+}
+
+.gradient-gold {
+  background: linear-gradient(45deg, var(--primary), var(--primary-container));
+}
