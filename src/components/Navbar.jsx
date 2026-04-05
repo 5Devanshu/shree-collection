@@ -20,7 +20,7 @@ const Navbar = () => {
 
         {/* Center Logo */}
         <div className="nav-logo">
-          <h1 className="headline-md">Shree</h1>
+          <img src="/logo.png" alt="Shree Logo" className="navbar-logo-img" />
         </div>
 
         {/* Right Icons/Links */}

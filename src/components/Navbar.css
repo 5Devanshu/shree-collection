@@ -29,10 +29,15 @@
 .nav-logo {
   flex: 1;
   text-align: center;
+  display: flex;
+  justify-content: center;
+  align-items: center;
 }
 
-.nav-logo h1 {
-  margin: 0;
+.navbar-logo-img {
+  height: 160px;
+  width: auto;
+  object-fit: contain;
 }
 
 .nav-link {
