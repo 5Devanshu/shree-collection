@@ -2,72 +2,125 @@
   display: flex;
   flex-direction: column;
   background-color: var(--surface-container-lowest);
-  transition: transform 0.4s ease, box-shadow 0.4s ease;
-  /* Soft lift, no borders */
+  transition: transform 0.3s ease;
+  animation: fadeUp 0.5s ease forwards;
+  opacity: 0;
 }
 
-.product-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(26, 28, 28, 0.04); /* Ambient shadow */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0);    }
 }
+
+.product-card:hover { transform: translateY(-3px); }
 
 .product-image-container {
-  position: relative;
   width: 100%;
-  padding-bottom: 125%; /* 4:5 aspect ratio */
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   background-color: var(--surface-container-low);
+  position: relative;       /* needed for discount badge */
 }
 
 .product-image {
-  position: absolute;
-  top: 0;
-  left: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  transition: transform 0.5s ease;
+  display: block;
 }
 
-.product-overlay {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  padding: var(--spacing-6);
-  background: linear-gradient(to top, rgba(26, 28, 28, 0.2), transparent);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-  display: flex;
-  justify-content: center;
-  gap: var(--spacing-3);
-}
+.product-card:hover .product-image { transform: scale(1.04); }
 
-.product-card:hover .product-overlay {
-  opacity: 1;
-}
-
-.product-action {
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-}
-
-.product-info {
-  padding: var(--spacing-8) var(--spacing-6) var(--spacing-12) var(--spacing-6);
-  /* Asymmetrical padding: more bottom padding for a museum label look */
-  text-align: center;
-}
-
-.product-title {
-  margin-bottom: var(--spacing-4);
-  font-size: 1.25rem;
-}
-
-.product-meta {
+.product-details {
+  padding: var(--spacing-4) var(--spacing-3);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-2);
-  color: var(--outline);
+  gap: 4px;
+  flex: 1;
 }
 
-.product-material {
+.product-details .title {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 400;
+  color: var(--on-surface);
+  line-height: 1.3;
+  margin-bottom: 2px;
+}
+
+.product-details .title:hover { color: var(--primary); }
+
+.product-details .material {
+  font-size: 0.68rem;
+  color: var(--on-surface-variant);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.product-details .price {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--on-surface);
+  margin-top: var(--spacing-2);
+}
+
+.product-details .discounted-price {
+  font-size: 0.9rem;
+  font-weight: 600;
   color: var(--primary);
+}
+
+.product-details .original-price {
+  font-size: 0.78rem;
+  color: var(--on-surface-variant);
+  text-decoration: line-through;
+}
+
+.product-actions {
+  display: flex;
+  gap: var(--spacing-2);
+  margin-top: var(--spacing-4);
+}
+
+.product-actions .btn-secondary {
+  flex: 1;
+  padding: var(--spacing-3) var(--spacing-2);
+  font-size: 0.68rem;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid var(--outline-variant);
+  background: transparent;
+  color: var(--on-surface);
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  transition: border-color 0.2s;
+}
+
+.product-actions .btn-secondary:hover { border-color: var(--on-surface); }
+
+.product-actions .btn-primary {
+  flex: 1;
+  padding: var(--spacing-3) var(--spacing-2);
+  font-size: 0.68rem;
+  text-align: center;
+  cursor: pointer;
+  background-color: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  font-family: var(--font-sans);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.product-actions .btn-primary:hover { background-color: var(--on-primary-container); }
+
+@media (max-width: 480px) {
+  .product-details .title { font-size: 0.82rem; }
+  .product-details .price,
+  .product-details .discounted-price { font-size: 0.82rem; }
 }

@@ -1,17 +1,14 @@
 .featured-section {
-  padding: var(--spacing-16) var(--spacing-6);
+  padding: var(--spacing-12) var(--spacing-8);
   background-color: var(--surface);
-  /* The "floor" of the gallery */
 }
 
 .section-header {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin-bottom: var(--spacing-12);
-  padding: 0 var(--spacing-6);
-  border-bottom: 1px solid var(--surface-container-low); /* subtle hint line, as per "no-line" relaxation for vast sections or use no lines at all -> we'll stick to no lines */
-  border: none;
+  margin-bottom: var(--spacing-8);
+  padding: 0 var(--spacing-2);
 }
 
 .view-all {
@@ -31,17 +28,25 @@
   background-color: var(--primary);
 }
 
+/* ── Reduced grid size ───────────────────────────────────────────────────────── */
 .product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-  /* Huge spacing for breathing room */
-  gap: var(--spacing-16);
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--spacing-8);
   max-width: 1400px;
   margin: 0 auto;
 }
 
 @media (max-width: 768px) {
   .product-grid {
-    gap: var(--spacing-8);
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--spacing-6);
+  }
+}
+
+@media (max-width: 480px) {
+  .product-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: var(--spacing-4);
   }
 }
