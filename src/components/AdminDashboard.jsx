@@ -5,20 +5,24 @@ import { useStore } from '../context/StoreContext';
 const AdminDashboard = () => {
   const { products, categories } = useStore();
 
-  const inStock       = products.filter(p => p.stock > 0).length;
-  const featured      = products.filter(p => p.featured).length;
-  const inventoryValue = products.reduce((sum, p) => sum + p.price * p.stock, 0);
+  // Safe checks for undefined products/categories
+  const productsList = Array.isArray(products) ? products : [];
+  const categoriesList = Array.isArray(categories) ? categories : [];
+
+  const inStock       = productsList.filter(p => p.stock > 0).length;
+  const featured      = productsList.filter(p => p.featured).length;
+  const inventoryValue = productsList.reduce((sum, p) => sum + p.price * p.stock, 0);
 
   return (
     <div className="admin-content">
       <div className="stat-cards">
         <div className="stat-card">
           <h3 className="label-md">Total Products</h3>
-          <p className="display-lg">{products.length}</p>
+          <p className="display-lg">{productsList.length}</p>
         </div>
         <div className="stat-card">
           <h3 className="label-md">Categories</h3>
-          <p className="display-lg">{categories.length}</p>
+          <p className="display-lg">{categoriesList.length}</p>
         </div>
         <div className="stat-card">
           <h3 className="label-md">In Stock</h3>
@@ -44,13 +48,13 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {categories.slice(0, 6).map(c => (
+              {categoriesList.slice(0, 6).map(c => (
                 <tr key={c._id}>
                   <td className="body-lg">{c.name}</td>
                   <td style={{ fontSize: '0.8rem', color: 'var(--primary)', fontFamily: 'monospace' }}>/collections/{c.slug}</td>
                 </tr>
               ))}
-              {categories.length === 0 && (
+              {categoriesList.length === 0 && (
                 <tr><td colSpan={2} style={{ color: 'var(--on-surface-variant)', padding: 'var(--spacing-6)' }}>No categories yet</td></tr>
               )}
             </tbody>
@@ -71,7 +75,7 @@ const AdminDashboard = () => {
               </tr>
             </thead>
             <tbody>
-              {products.slice(-5).reverse().map(p => (
+              {productsList.slice(-5).reverse().map(p => (
                 <tr key={p._id}>
                   <td className="body-lg" style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</td>
                   <td className="body-lg">₹{Number(p.price).toLocaleString()}</td>
@@ -85,7 +89,7 @@ const AdminDashboard = () => {
                   </td>
                 </tr>
               ))}
-              {products.length === 0 && (
+              {productsList.length === 0 && (
                 <tr><td colSpan={3} style={{ color: 'var(--on-surface-variant)', padding: 'var(--spacing-6)' }}>No products yet</td></tr>
               )}
             </tbody>
@@ -99,7 +103,7 @@ const AdminDashboard = () => {
           <Link to="/admin/products" className="btn btn-tertiary" style={{ fontSize: '0.8rem' }}>Edit →</Link>
         </div>
         <div style={{ display: 'flex', gap: 'var(--spacing-6)', flexWrap: 'wrap' }}>
-          {products.filter(p => p.featured).map(p => (
+          {productsList.filter(p => p.featured).map(p => (
             <div key={p._id} style={{
               display: 'flex', gap: 'var(--spacing-4)', alignItems: 'center',
               padding: 'var(--spacing-4)', border: '1px solid var(--outline-variant)',

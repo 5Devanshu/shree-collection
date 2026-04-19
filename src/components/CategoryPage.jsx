@@ -83,9 +83,12 @@ const CategoryPage = () => {
 
   // ── Filtered + sorted products ────────────────────────────────────────────
   const displayed = useMemo(() => {
+    // Safe check — ensure products is always an array
+    const productList = Array.isArray(products) ? products : [];
+    
     let list = isAll
-      ? [...products]
-      : products.filter(p => p.categorySlug === category);
+      ? [...productList]
+      : productList.filter(p => p.categorySlug === category);
 
     const { min, max } = activeBounds;
     list = list.filter(p => {

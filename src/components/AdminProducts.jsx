@@ -336,7 +336,7 @@ const AdminProducts = () => {
     try { await deleteProduct(id); } catch (err) { alert(err.message); }
   };
 
-  const filtered = products.filter(p => {
+  const filtered = (Array.isArray(products) ? products : []).filter(p => {
     const matchSearch = p.title.toLowerCase().includes(search.toLowerCase());
     const matchCat    = !filterCat || p.categorySlug === filterCat;
     return matchSearch && matchCat;

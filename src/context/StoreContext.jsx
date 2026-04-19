@@ -71,25 +71,39 @@ export const StoreProvider = ({ children }) => {
     localStorage.removeItem('shree_products');
 
     fetchCategories()
-      .then(res => setCategories(res.data.data))
-      .catch(console.error)
+      .then(res => setCategories(res.data?.data || res.data || []))
+      .catch(err => {
+        console.error('Failed to fetch categories:', err);
+        setCategories([]);
+      })
       .finally(() => setLoadingCats(false));
 
     fetchProducts({ limit: 100 })
-      .then(res => setProducts(res.data.data))
-      .catch(console.error)
+      .then(res => setProducts(res.data?.data || res.data || []))
+      .catch(err => {
+        console.error('Failed to fetch products:', err);
+        setProducts([]);
+      })
       .finally(() => setLoadingProds(false));
   }, []);
 
   // ── Refresh — call this after any stock/discount update ───────────────────
   const refreshProducts = async (params) => {
-    const res = await fetchProducts({ limit: 100, ...params });
-    setProducts(res.data.data);
+    try {
+      const res = await fetchProducts({ limit: 100, ...params });
+      setProducts(res.data?.data || res.data || []);
+    } catch (err) {
+      console.error('Failed to refresh products:', err);
+    }
   };
 
   const refreshCategories = async () => {
-    const res = await fetchCategories();
-    setCategories(res.data.data);
+    try {
+      const res = await fetchCategories();
+      setCategories(res.data?.data || res.data || []);
+    } catch (err) {
+      console.error('Failed to refresh categories:', err);
+    }
   };
 
   // ── Category CRUD ─────────────────────────────────────────────────────────

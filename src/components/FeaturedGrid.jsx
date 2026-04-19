@@ -7,8 +7,8 @@ import './FeaturedGrid.css';
 const FeaturedGrid = () => {
   const { products, loadingProds } = useStore();
 
-  // Pull featured products directly from MongoDB data
-  const featured = products.filter(p => p.featured === true);
+  // Pull featured products directly from MongoDB data — safe check for undefined
+  const featured = (Array.isArray(products) ? products : []).filter(p => p.featured === true);
 
   // Loading state
   if (loadingProds) {

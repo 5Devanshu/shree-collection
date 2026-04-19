@@ -58,7 +58,7 @@ const AdminDiscounts = () => {
     finally { setLoad(product._id, false); }
   };
 
-  const filtered = products.filter(p =>
+  const filtered = (Array.isArray(products) ? products : []).filter(p =>
     p.title.toLowerCase().includes(search.toLowerCase())
   );
 
