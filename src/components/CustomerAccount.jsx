@@ -15,7 +15,7 @@ const OrderHistory = () => {
 
   useEffect(() => {
     getMyOrders()
-      .then(res => setOrders(res.data.data))
+      .then(res => setOrders(res.data?.data || res.data || []))
       .catch(err => setError(err.message))
       .finally(()=> setLoading(false));
   }, []);
