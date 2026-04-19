@@ -38,7 +38,7 @@ const OrderHistory = () => {
   return (
     <div>
       <h2 className="headline-md account-section-title">My Orders</h2>
-      {orders.map(order => (
+      {(Array.isArray(orders) ? orders : []).map(order => (
         <div key={order._id} className="order-card">
           <div className="order-card-header">
             <div>
@@ -62,7 +62,7 @@ const OrderHistory = () => {
             </div>
           </div>
           <div className="order-card-body">
-            {order.items.map((item, i) => (
+            {(Array.isArray(order.items) ? order.items : []).map((item, i) => (
               <div key={i} className="order-item-row">
                 {item.image && (
                   <img src={item.image} alt={item.title} className="order-item-image" />
@@ -222,7 +222,7 @@ const AddressesTab = () => {
 
       {/* Existing addresses */}
       <div className="address-cards">
-        {customer?.savedAddresses?.map(addr => (
+        {(Array.isArray(customer?.savedAddresses) ? customer.savedAddresses : []).map(addr => (
           <div key={addr._id} className="address-card">
             <p className="address-label">{addr.label}</p>
             <p className="body-lg">{addr.line1}</p>

@@ -73,7 +73,7 @@ const Navbar = () => {
               >
                 All Pieces
               </Link>
-              {categories.map(cat => (
+              {(Array.isArray(categories) ? categories : []).map(cat => (
                 <Link
                   key={cat._id}
                   to={`/collections/${cat.slug}`}

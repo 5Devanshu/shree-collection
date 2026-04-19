@@ -137,7 +137,7 @@ const ProductDescription = () => {
           {/* Dot indicators */}
           {allImages.length > 1 && (
             <div className="gallery-dots">
-              {allImages.map((_, i) => (
+              {(Array.isArray(allImages) ? allImages : []).map((_, i) => (
                 <button
                   key={i}
                   className={`gallery-dot ${i === activeImg ? 'gallery-dot--active' : ''}`}
@@ -151,7 +151,7 @@ const ProductDescription = () => {
           {/* Thumbnail strip */}
           {allImages.length > 1 && (
             <div className="gallery-thumbs">
-              {allImages.map((img, i) => (
+              {(Array.isArray(allImages) ? allImages : []).map((img, i) => (
                 <button
                   key={i}
                   className={`gallery-thumb ${i === activeImg ? 'gallery-thumb--active' : ''}`}
@@ -220,7 +220,7 @@ const ProductDescription = () => {
             {/* Spec details */}
             {product.details?.length > 0 && (
               <div className="product-details-list">
-                {product.details.map((d, i) => (
+                {(Array.isArray(product.details) ? product.details : []).map((d, i) => (
                   <div key={i} className="detail-item">
                     <span className="label-md">{d.label}</span>
                     <span className="body-lg">{d.value}</span>

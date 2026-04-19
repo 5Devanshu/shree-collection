@@ -82,7 +82,7 @@ const Checkout = () => {
 
       // Prepare order data
       const orderData = {
-        items: cart.map(item => ({
+        items: (Array.isArray(cart) ? cart : []).map(item => ({
           productId: item._id,
           qty: item.qty,
         })),
@@ -237,7 +237,7 @@ const Checkout = () => {
               <div className="checkout-section">
                 <h2 className="checkout-section-title">Saved Addresses</h2>
                 <div className="saved-address-list">
-                  {customer.savedAddresses.map(addr => (
+                  {(Array.isArray(customer?.savedAddresses) ? customer.savedAddresses : []).map(addr => (
                     <button
                       key={addr._id}
                       type="button"
@@ -298,7 +298,7 @@ const Checkout = () => {
 
           {/* Cart items */}
           <div className="summary-items">
-            {cart.map(item => {
+            {(Array.isArray(cart) ? cart : []).map(item => {
               const hasDiscount   = item.discountEnabled && item.discountedPrice && item.discountedPrice < item.price;
               const displayPrice  = hasDiscount ? item.discountedPrice : item.price;
               const numericPrice  = parseFloat(displayPrice) || 0;

@@ -190,7 +190,7 @@ const OrderDetailModal = ({ orderId, onClose, onStatusUpdate }) => {
                   Items Ordered
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {order.items.map((item, i) => (
+                  {(Array.isArray(order.items) ? order.items : []).map((item, i) => (
                     <div key={i} style={{ display: 'flex', gap: '1rem', alignItems: 'center', padding: '0.75rem 0', borderBottom: '1px solid var(--surface-container-highest)' }}>
                       {item.image && (
                         <img src={item.image} alt={item.title} style={{ width: 56, height: 56, objectFit: 'cover', border: '1px solid var(--outline-variant)', flexShrink: 0 }} />
@@ -245,7 +245,7 @@ const AdminOrders = () => {
 
   const exportCSV = () => {
     const headers = ['Order ID', 'Customer', 'Email', 'Phone', 'City', 'State', 'Pincode', 'Status', 'Payment', 'Total', 'Date'];
-    const rows = orders.map(o => [
+    const rows = (Array.isArray(orders) ? orders : []).map(o => [
       o._id,
       o.customer.name,
       o.customer.email,
@@ -323,7 +323,7 @@ const AdminOrders = () => {
                   </td>
                 </tr>
               )}
-              {orders.map(o => (
+              {(Array.isArray(orders) ? orders : []).map(o => (
                 <tr key={o._id}>
                   <td>
                     <code style={{ fontSize: '0.8rem', color: 'var(--primary)', fontFamily: 'monospace' }}>
