@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useStore }    from '../context/StoreContext';
 import { useCustomer } from '../context/CustomerContext';
+import { adminLogout } from '../api/client';
 import './Navbar.css';
 
 const Navbar = () => {
@@ -9,23 +10,76 @@ const Navbar = () => {
   const { customer, isLoggedIn, logout } = useCustomer();
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
+  // ── Dropdown state ────────────────────────────────────────────────────────
+  const [openDropdown, setOpenDropdown] = useState(null); // 'collections', 'admin', 'account', or null
+
+  // ── Check admin token ─────────────────────────────────────────────────────
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    const checkAdmin = () => {
+      const token = localStorage.getItem('shree_admin_token');
+      setIsAdmin(!!token);
+    };
+
+    checkAdmin();
+
+    // Re-check whenever localStorage changes (login / logout in another tab)
+    window.addEventListener('storage', checkAdmin);
+    return () => window.removeEventListener('storage', checkAdmin);
+  }, []);
+
+  // Also re-check on every render for same-tab login
+  useEffect(() => {
+    const token = localStorage.getItem('shree_admin_token');
+    setIsAdmin(!!token);
+  });
+
+  const handleAdminLogout = () => {
+    adminLogout();
+    setIsAdmin(false);
     navigate('/');
+  };
+
+  const handleCustomerLogout = () => {
+    logout();
+    setOpenDropdown(null); // Close dropdown
+    navigate('/');
+  };
+
+  const toggleDropdown = (dropdown) => {
+    setOpenDropdown(openDropdown === dropdown ? null : dropdown);
   };
 
   return (
     <nav className="navbar glass-gold">
       <div className="navbar-container">
 
-        {/* Left */}
+        {/* ── Left — Collections dropdown ───────────────────────────────── */}
         <div className="nav-links">
           <div className="nav-dropdown">
-            <span className="nav-link label-md" style={{ cursor: 'pointer' }}>Collections</span>
-            <div className="dropdown-content">
-              <Link to="/collections/all" className="dropdown-item label-md">All Pieces</Link>
+            <span
+              className="nav-link label-md"
+              style={{ cursor: 'pointer' }}
+              onClick={() => toggleDropdown('collections')}
+            >
+              Collections
+            </span>
+            <div className={`dropdown-content ${openDropdown === 'collections' ? 'active' : ''}`}>
+              <Link
+                to="/collections/all"
+                className="dropdown-item label-md"
+                onClick={() => setOpenDropdown(null)}
+              >
+                All Pieces
+              </Link>
               {categories.map(cat => (
-                <Link key={cat._id} to={`/collections/${cat.slug}`} className="dropdown-item label-md">
+                <Link
+                  key={cat._id}
+                  to={`/collections/${cat.slug}`}
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
                   {cat.name}
                 </Link>
               ))}
@@ -34,41 +88,131 @@ const Navbar = () => {
           <Link to="/" className="nav-link label-md">Home</Link>
         </div>
 
-        {/* Center */}
+        {/* ── Center — Logo ─────────────────────────────────────────────── */}
         <div className="nav-logo">
-          <Link to="/"><img src="/logo.png" alt="Shree Collection" className="navbar-logo-img" /></Link>
+          <Link to="/">
+            <img src="/logo.png" alt="Shree Collection" className="navbar-logo-img" />
+          </Link>
         </div>
 
-        {/* Right */}
+        {/* ── Right — Auth state ────────────────────────────────────────── */}
         <div className="nav-actions">
-          {/* Customer account dropdown */}
-          {isLoggedIn ? (
+
+          {/* ── Admin is logged in ────────────────────────────────────────── */}
+          {isAdmin && (
             <div className="nav-dropdown">
-              <span className="nav-link label-md" style={{ cursor: 'pointer' }}>
-                {customer.name.split(' ')[0]}
+              <span
+                className="nav-link label-md nav-account-pill"
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleDropdown('admin')}
+              >
+                <span className="nav-account-dot nav-account-dot--admin" />
+                Admin Portal
               </span>
-              <div className="dropdown-content" style={{ right: 0, left: 'auto' }}>
-                <Link to="/account/orders"    className="dropdown-item label-md">My Orders</Link>
-                <Link to="/account/profile"   className="dropdown-item label-md">Profile</Link>
-                <Link to="/account/addresses" className="dropdown-item label-md">Addresses</Link>
-                <button
+              <div className={`dropdown-content dropdown-content--right ${openDropdown === 'admin' ? 'active' : ''}`}>
+                <Link
+                  to="/admin"
                   className="dropdown-item label-md"
-                  onClick={handleLogout}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', width: '100%', textAlign: 'left', color: 'var(--on-error)' }}
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  Dashboard
+                </Link>
+                <Link
+                  to="/admin/products"
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  Products
+                </Link>
+                <Link
+                  to="/admin/categories"
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  Categories
+                </Link>
+                <Link
+                  to="/admin/orders"
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  Orders
+                </Link>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-item label-md dropdown-item--danger"
+                  onClick={() => {
+                    handleAdminLogout();
+                    setOpenDropdown(null);
+                  }}
                 >
                   Logout
                 </button>
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* ── Customer is logged in ─────────────────────────────────────── */}
+          {!isAdmin && isLoggedIn && (
+            <div className="nav-dropdown">
+              <span
+                className="nav-link label-md nav-account-pill"
+                style={{ cursor: 'pointer' }}
+                onClick={() => toggleDropdown('account')}
+              >
+                <span className="nav-account-dot nav-account-dot--customer" />
+                {customer.name.split(' ')[0]}
+              </span>
+              <div className={`dropdown-content dropdown-content--right ${openDropdown === 'account' ? 'active' : ''}`}>
+                <Link
+                  to="/account/orders"
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  My Orders
+                </Link>
+                <Link
+                  to="/account/profile"
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  Profile
+                </Link>
+                <Link
+                  to="/account/addresses"
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  Addresses
+                </Link>
+                <div className="dropdown-divider" />
+                <button
+                  className="dropdown-item label-md dropdown-item--danger"
+                  onClick={() => {
+                    handleCustomerLogout();
+                    setOpenDropdown(null);
+                  }}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* ── Nobody logged in ──────────────────────────────────────────── */}
+          {!isAdmin && !isLoggedIn && (
             <Link to="/login" className="nav-link label-md">Login</Link>
           )}
 
+          {/* ── Cart ──────────────────────────────────────────────────────── */}
           <Link to="/checkout" className="nav-link label-md">
-            Cart {cartCount > 0 && <span className="cart-badge">{cartCount}</span>}
+            Cart
+            {cartCount > 0 && (
+              <span className="cart-badge">{cartCount}</span>
+            )}
           </Link>
-        </div>
 
+        </div>
       </div>
     </nav>
   );

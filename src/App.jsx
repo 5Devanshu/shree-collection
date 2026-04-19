@@ -15,8 +15,8 @@ import CustomerAccount      from './components/CustomerAccount';
 
 function App() {
   return (
-    <CustomerProvider>
-      <StoreProvider>
+    <StoreProvider>
+      <CustomerProvider>
         <Router>
           <div className="app">
             <Navbar />
@@ -42,8 +42,8 @@ function App() {
             </Routes>
           </div>
         </Router>
-      </StoreProvider>
-    </CustomerProvider>
+      </CustomerProvider>
+    </StoreProvider>
   );
 }
 

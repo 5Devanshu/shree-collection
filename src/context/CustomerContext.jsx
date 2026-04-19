@@ -18,27 +18,39 @@ export const CustomerProvider = ({ children }) => {
     if (!token) { setLoading(false); return; }
 
     getMyProfile()
-      .then(res => setCustomer(res.data.data))
-      .catch(()  => localStorage.removeItem('shree_customer_token'))
+      .then(res => {
+        const customerData = res.data.data;
+        localStorage.setItem('shree_customer_id', customerData?.id || customerData?._id);
+        setCustomer(customerData);
+      })
+      .catch(()  => {
+        localStorage.removeItem('shree_customer_token');
+        localStorage.removeItem('shree_customer_id');
+      })
       .finally(()=> setLoading(false));
   }, []);
 
   const register = async (data) => {
     const res = await apiRegister(data);
     localStorage.setItem('shree_customer_token', res.data.token);
-    setCustomer(res.data.customer);
+    const customerData = res.data.customer;
+    localStorage.setItem('shree_customer_id', customerData?.id || customerData?._id);
+    setCustomer(customerData);
     return res.data;
   };
 
   const login = async (data) => {
     const res = await apiLogin(data);
     localStorage.setItem('shree_customer_token', res.data.token);
-    setCustomer(res.data.customer);
+    const customerData = res.data.customer;
+    localStorage.setItem('shree_customer_id', customerData?.id || customerData?._id);
+    setCustomer(customerData);
     return res.data;
   };
 
   const logout = () => {
     localStorage.removeItem('shree_customer_token');
+    localStorage.removeItem('shree_customer_id');
     setCustomer(null);
   };
 

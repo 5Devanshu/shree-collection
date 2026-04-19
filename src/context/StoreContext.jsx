@@ -13,12 +13,56 @@ import {
 
 const StoreContext = createContext();
 
+// ── Helper: Get cart key based on user ID ──────────────────────────────────
+const getCartKey = (customerId) => {
+  // Only save cart for logged-in users
+  return customerId ? `shree_cart_${customerId}` : null;
+};
+
+// ── Helper: Load cart from localStorage ────────────────────────────────────
+const loadCartFromStorage = (customerId) => {
+  try {
+    const key = getCartKey(customerId);
+    if (!key) return []; // No cart for guests
+    const stored = localStorage.getItem(key);
+    return stored ? JSON.parse(stored) : [];
+  } catch (err) {
+    console.error('Failed to load cart:', err);
+    return [];
+  }
+};
+
+// ── Helper: Save cart to localStorage ──────────────────────────────────────
+const saveCartToStorage = (cart, customerId) => {
+  try {
+    const key = getCartKey(customerId);
+    if (!key) return; // Don't save for guests
+    localStorage.setItem(key, JSON.stringify(cart));
+  } catch (err) {
+    console.error('Failed to save cart:', err);
+  }
+};
+
 export const StoreProvider = ({ children }) => {
   const [categories,   setCategories]   = useState([]);
   const [products,     setProducts]     = useState([]);
   const [cart,         setCart]         = useState([]);
   const [loadingCats,  setLoadingCats]  = useState(true);
   const [loadingProds, setLoadingProds] = useState(true);
+
+  // ── Load cart from localStorage on mount ──────────────────────────────────
+  useEffect(() => {
+    // Only restore cart if user is logged in
+    const token = localStorage.getItem('shree_customer_token');
+    if (token) {
+      const customerId = localStorage.getItem('shree_customer_id');
+      const savedCart = loadCartFromStorage(customerId);
+      setCart(savedCart);
+    } else {
+      // Guest users start with empty cart (not persistent)
+      setCart([]);
+    }
+  }, []);
 
   // ── Always fetch fresh from API — never use localStorage ─────────────────
   useEffect(() => {
@@ -85,21 +129,62 @@ export const StoreProvider = ({ children }) => {
   };
 
   // ── Cart ──────────────────────────────────────────────────────────────────
-  const addToCart = (product) =>
+  const getCurrentUserId = () => {
+    const token = localStorage.getItem('shree_customer_token');
+    return token ? localStorage.getItem('shree_customer_id') : null;
+  };
+
+  const addToCart = (product) => {
+    // Only save to cart if user is logged in
+    const userId = getCurrentUserId();
+    if (!userId) {
+      alert('Please log in to save items to your cart.');
+      return;
+    }
+
     setCart(prev => {
       const existing = prev.find(i => i._id === product._id);
-      if (existing) return prev.map(i => i._id === product._id ? { ...i, qty: i.qty + 1 } : i);
-      return [...prev, { ...product, qty: 1 }];
+      const newCart = existing
+        ? prev.map(i => i._id === product._id ? { ...i, qty: i.qty + 1 } : i)
+        : [...prev, { ...product, qty: 1 }];
+      saveCartToStorage(newCart, userId);
+      return newCart;
     });
+  };
 
-  const removeFromCart = (id) => setCart(prev => prev.filter(i => i._id !== id));
+  const removeFromCart = (id) => {
+    const userId = getCurrentUserId();
+    setCart(prev => {
+      const newCart = prev.filter(i => i._id !== id);
+      if (userId) {
+        saveCartToStorage(newCart, userId);
+      }
+      return newCart;
+    });
+  };
 
-  const updateCartQty = (id, qty) =>
-    qty <= 0
-      ? removeFromCart(id)
-      : setCart(prev => prev.map(i => i._id === id ? { ...i, qty } : i));
+  const updateCartQty = (id, qty) => {
+    const userId = getCurrentUserId();
+    if (qty <= 0) {
+      removeFromCart(id);
+    } else {
+      setCart(prev => {
+        const newCart = prev.map(i => i._id === id ? { ...i, qty } : i);
+        if (userId) {
+          saveCartToStorage(newCart, userId);
+        }
+        return newCart;
+      });
+    }
+  };
 
-  const clearCart = () => setCart([]);
+  const clearCart = () => {
+    const userId = getCurrentUserId();
+    setCart([]);
+    if (userId) {
+      saveCartToStorage([], userId);
+    }
+  };
 
   const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
   const cartTotal = cart.reduce((sum, i) => {

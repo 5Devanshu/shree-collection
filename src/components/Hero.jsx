@@ -11,7 +11,7 @@ const Hero = () => {
           Shree <br/>Collection
         </h2>
         <p className="body-lg hero-text">
-          A collection that transcends time. Discover high-jewelry pieces crafted with uncompromising precision and intentional asymmetry.
+          A collection that transcends time. Discover exquisite high-jewelry pieces crafted with uncompromising precision, intentional asymmetry, and timeless elegance—designed for those who appreciate the extraordinary.
         </p>
         <div className="hero-actions">
           <Button variant="primary">Explore Collection</Button>

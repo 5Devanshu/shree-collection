@@ -83,7 +83,7 @@ export const deleteCategory   = (id)         => client.delete(`/categories/${id}
 export const fetchProducts    = (params)     => client.get('/products', { params });
 export const fetchProductById = (id)         => client.get(`/products/${id}`);
 export const createProduct    = (data)       => client.post('/products', data);
-export const updateProduct    = (id, data)   => client.put(`/products/${id}`, data);
+export const updateProduct = (id, data) => client.put(`/products/${id}`, data);
 export const deleteProduct    = (id)         => client.delete(`/products/${id}`);
 export const toggleFeatured   = (id)         => client.patch(`/products/${id}/featured`);
 
@@ -104,6 +104,7 @@ export const getSubscribers     = (productId) =>
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 export const createOrder       = (data)   => client.post('/orders', data);
+export const createDemoOrder   = (data)   => client.post('/orders/demo', data);
 export const verifyPayment     = (id)     => client.post(`/orders/${id}/verify-payment`);
 export const fetchOrders       = (params) => client.get('/orders', { params });
 export const fetchOrderById    = (id)     => client.get(`/orders/${id}`);

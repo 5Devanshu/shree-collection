@@ -1,49 +1,58 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
+import { useStore } from '../context/StoreContext';
 import ProductCard from './ProductCard';
 import './FeaturedGrid.css';
-import product1 from '../assets/product_1_diamond.png';
-import product2 from '../assets/product_2_pearl.png';
-import product3 from '../assets/product_3_emerald.png';
-
-const products = [
-  { 
-    id: 1, 
-    title: 'Lumina Diamond Solitaire', 
-    material: '18K YELLOW GOLD', 
-    price: '$4,200', 
-    image: product1,
-    delay: 0
-  },
-  { 
-    id: 2, 
-    title: 'Eclipse Pearl Drop', 
-    material: 'WHITE GOLD, SOUTH SEA PEARL', 
-    price: '$8,500', 
-    image: product2,
-    delay: 0.1
-  },
-  { 
-    id: 3, 
-    title: 'Solstice Emerald Cuff', 
-    material: 'PLATINUM', 
-    price: '$12,000', 
-    image: product3,
-    delay: 0.2
-  }
-];
 
 const FeaturedGrid = () => {
+  const { products, loadingProds } = useStore();
+
+  // Pull featured products directly from MongoDB data
+  const featured = products.filter(p => p.featured === true);
+
+  // Loading state
+  if (loadingProds) {
+    return (
+      <section className="featured-section">
+        <div className="section-header">
+          <h2 className="headline-md">Curated Pieces</h2>
+        </div>
+        <div style={{
+          display: 'flex',
+          gap: '2rem',
+          maxWidth: 1400,
+          margin: '0 auto',
+        }}>
+          {[1, 2, 3].map(i => (
+            <div key={i} style={{
+              flex: 1,
+              aspectRatio: '1/1',
+              background: 'var(--surface-container-low)',
+              animation: 'pulse 1.5s ease infinite',
+            }} />
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  // No featured products yet
+  if (featured.length === 0) {
+    return null;
+  }
+
   return (
     <section className="featured-section">
       <div className="section-header">
         <h2 className="headline-md">Curated Pieces</h2>
-        <a href="#all" className="view-all label-md">View All</a>
+        <Link to="/collections/all" className="view-all label-md">View All</Link>
       </div>
       <div className="product-grid">
-        {products.map((product) => (
-          <ProductCard 
-            key={product.id}
+        {featured.map((product, i) => (
+          <ProductCard
+            key={product._id}
             {...product}
+            delay={i * 0.08}
           />
         ))}
       </div>

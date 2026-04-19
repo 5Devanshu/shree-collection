@@ -22,8 +22,12 @@
 }
 
 .hero-text {
-  max-width: 400px;
+  max-width: 450px;
   color: var(--on-surface-variant, #4d4635);
+  font-size: 1.15rem;
+  line-height: 1.6;
+  letter-spacing: 0.3px;
+  font-weight: 400;
 }
 
 .hero-actions {
