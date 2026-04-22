@@ -104,8 +104,18 @@ const ProductForm = ({ initial, categories, onSave, onCancel }) => {
   };
 
   const handleSubmit = () => {
-    if (!form.title.trim() || !form.price || !form.categorySlug) {
-      alert('Product name, price and category are required.');
+    // Validate all required fields
+    const errors = [];
+    
+    if (!form.title.trim()) errors.push('Product name is required');
+    if (!form.price) errors.push('Price is required');
+    if (!form.categorySlug) errors.push('Category is required');
+    if (!form.image || !form.image.trim()) errors.push('Product image is required');
+    if (!form.description || !form.description.trim()) errors.push('Product description is required');
+    if (!form.material || !form.material.trim()) errors.push('Material is required');
+    
+    if (errors.length > 0) {
+      alert('Please fill in all required fields:\n\n' + errors.join('\n'));
       return;
     }
 
@@ -215,7 +225,7 @@ const ProductForm = ({ initial, categories, onSave, onCancel }) => {
             value={form.title} onChange={e => set('title', e.target.value)} />
         </div>
         <div className="form-field">
-          <label>Material</label>
+          <label>Material *</label>
           <input type="text" placeholder="e.g. 18K YELLOW GOLD"
             value={form.material} onChange={e => set('material', e.target.value)} />
         </div>
@@ -255,7 +265,7 @@ const ProductForm = ({ initial, categories, onSave, onCancel }) => {
 
       {/* ── Description ──────────────────────────────────────────────────────── */}
       <div className="form-field">
-        <label>Description</label>
+        <label>Description *</label>
         <textarea rows={3} placeholder="Describe the piece…"
           value={form.description} onChange={e => set('description', e.target.value)} />
       </div>
