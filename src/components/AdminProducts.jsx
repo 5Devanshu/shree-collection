@@ -337,7 +337,7 @@ const AdminProducts = () => {
   };
 
   const filtered = (Array.isArray(products) ? products : []).filter(p => {
-    const matchSearch = p.title.toLowerCase().includes(search.toLowerCase());
+    const matchSearch = (p.title ?? '').toLowerCase().includes(search.toLowerCase());
     const matchCat    = !filterCat || p.categorySlug === filterCat;
     return matchSearch && matchCat;
   });
