@@ -137,15 +137,40 @@ export const StoreProvider = ({ children }) => {
   };
 
   // ── Product CRUD ──────────────────────────────────────────────────────────
+  const transformProductData = (formData) => {
+    // Frontend uses categorySlug, but backend needs category ObjectId
+    const categoryObj = categories.find(c => c.slug === formData.categorySlug);
+    const categoryId = categoryObj?._id || formData.categorySlug;
+
+    // Transform frontend form structure to backend schema structure
+    return {
+      title: formData.title,
+      description: formData.description || '',
+      material: formData.material || '',
+      price: formData.price,
+      image: {
+        url: formData.image || '',
+        publicId: '', // Will be set by backend if Cloudinary
+      },
+      category: categoryId,
+      isFeatured: formData.featured ?? false,
+      gallery: formData.gallery || [],
+      details: formData.details || [],
+      stock: formData.stock || 0,
+    };
+  };
+
   const addProduct = async (data) => {
-    const res = await apiCreateProduct(data);
+    const transformed = transformProductData(data);
+    const res = await apiCreateProduct(transformed);
     const product = res.data?.product || res.data?.data || null;
     if (product) setProducts(prev => [product, ...prev]);
     return product;
   };
 
   const updateProduct = async (id, data) => {
-    const res = await apiUpdateProduct(id, data);
+    const transformed = transformProductData(data);
+    const res = await apiUpdateProduct(id, transformed);
     const product = res.data?.product || res.data?.data || null;
     if (product) setProducts(prev => prev.map(p => p._id === id ? product : p));
     return product;
