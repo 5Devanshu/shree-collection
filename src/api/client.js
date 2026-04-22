@@ -5,6 +5,9 @@ const client = axios.create({
   headers: { 'Content-Type': 'application/json' },
 });
 
+// ── Debug logging for API requests ─────────────────────────────────────────────
+const API_DEBUG = true; // Set to false to disable logging
+
 // ── Attach token automatically on every request ───────────────────────────────
 client.interceptors.request.use((config) => {
   const adminToken    = localStorage.getItem('shree_admin_token');
@@ -23,15 +26,43 @@ client.interceptors.request.use((config) => {
     delete config.headers['Content-Type'];
   }
 
+  // Debug logging
+  if (API_DEBUG) {
+    console.log('📤 API Request:', {
+      method: config.method?.toUpperCase(),
+      url: config.baseURL + config.url,
+      hasToken: !!token,
+      tokenType: adminToken ? 'admin' : (customerToken ? 'customer' : 'none'),
+    });
+  }
+
   return config;
 });
 
 // ── Global response error handler ─────────────────────────────────────────────
 client.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    if (API_DEBUG) {
+      console.log('✅ API Response:', {
+        status: response.status,
+        url: response.config.url,
+        dataKeys: Object.keys(response.data || {}),
+      });
+    }
+    return response;
+  },
   (error) => {
     const message =
       error.response?.data?.message || error.message || 'Something went wrong';
+    
+    if (API_DEBUG) {
+      console.error('❌ API Error:', {
+        status: error.response?.status,
+        url: error.config?.url,
+        message,
+        data: error.response?.data,
+      });
+    }
 
     // If 401 on an admin route — clear admin token and redirect to admin login
     if (error.response?.status === 401) {

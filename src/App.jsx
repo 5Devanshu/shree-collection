@@ -15,6 +15,11 @@ import CustomerRegister     from './components/CustomerRegister';
 import CustomerAccount      from './components/CustomerAccount';
 import TermsAndConditions   from './components/TermsAndConditions';
 
+// Debug utilities (only in development/non-production)
+if (import.meta.env.DEV) {
+  import('./utils/debugEnv.js');
+}
+
 function App() {
   return (
     <StoreProvider>
