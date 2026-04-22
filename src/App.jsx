@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { StoreProvider }    from './context/StoreContext';
 import { CustomerProvider } from './context/CustomerContext';
 import Navbar               from './components/Navbar';
+import Footer               from './components/Footer';
 import Hero                 from './components/Hero';
 import FeaturedGrid         from './components/FeaturedGrid';
 import AdminPanel           from './components/AdminPanel';
@@ -12,6 +13,7 @@ import Checkout             from './components/Checkout';
 import CustomerLogin        from './components/CustomerLogin';
 import CustomerRegister     from './components/CustomerRegister';
 import CustomerAccount      from './components/CustomerAccount';
+import TermsAndConditions   from './components/TermsAndConditions';
 
 function App() {
   return (
@@ -37,9 +39,16 @@ function App() {
               <Route path="/account/profile"   element={<CustomerAccount tab="profile" />} />
               <Route path="/account/addresses" element={<CustomerAccount tab="addresses" />} />
 
+              {/* Terms, Privacy, Policies */}
+              <Route path="/terms"             element={<TermsAndConditions />} />
+              <Route path="/privacy"           element={<TermsAndConditions />} />
+              <Route path="/shipping"          element={<TermsAndConditions />} />
+              <Route path="/returns"           element={<TermsAndConditions />} />
+
               {/* Admin — protected, redirects to /login if no token */}
               <Route path="/admin/*" element={<AdminPanel />} />
             </Routes>
+            <Footer />
           </div>
         </Router>
       </CustomerProvider>

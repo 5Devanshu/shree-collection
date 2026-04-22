@@ -1,0 +1,84 @@
+import React from 'react';
+import { Link } from 'react-router-dom';
+import './Footer.css';
+
+const Footer = () => {
+  const currentYear = new Date().getFullYear();
+
+  return (
+    <footer className="footer">
+      <div className="footer-container">
+        {/* Company Info */}
+        <div className="footer-section">
+          <h3>Shree Collection</h3>
+          <p>
+            Luxury jewelry and accessories crafted with elegance and precision. Discover our exquisite collection of fine jewelry.
+          </p>
+          <div className="social-links">
+            <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <i className="fab fa-facebook"></i>
+            </a>
+            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+              <i className="fab fa-instagram"></i>
+            </a>
+            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
+              <i className="fab fa-twitter"></i>
+            </a>
+            <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+              <i className="fab fa-youtube"></i>
+            </a>
+          </div>
+        </div>
+
+        {/* Quick Links */}
+        <div className="footer-section">
+          <h4>Quick Links</h4>
+          <ul>
+            <li><Link to="/">Home</Link></li>
+            <li><Link to="/collections/all">All Collections</Link></li>
+            <li><Link to="/account">My Account</Link></li>
+            <li><Link to="/checkout">Cart</Link></li>
+          </ul>
+        </div>
+
+        {/* Policies & Support */}
+        <div className="footer-section">
+          <h4>Policies & Support</h4>
+          <ul>
+            <li><Link to="/terms">Terms & Conditions</Link></li>
+            <li><Link to="/privacy">Privacy Policy</Link></li>
+            <li><Link to="/shipping">Shipping Policy</Link></li>
+            <li><Link to="/returns">Return & Refund Policy</Link></li>
+          </ul>
+        </div>
+
+        {/* Contact Info */}
+        <div className="footer-section">
+          <h4>Contact Us</h4>
+          <ul>
+            <li>
+              <strong>Email:</strong> <a href="mailto:support@shreecollection.com">support@shreecollection.com</a>
+            </li>
+            <li>
+              <strong>Phone:</strong> <a href="tel:+919876543210">+91 98765 43210</a>
+            </li>
+            <li>
+              <strong>Address:</strong> Shree Collection, India
+            </li>
+            <li>
+              <strong>Hours:</strong> Mon-Sun, 10 AM - 6 PM IST
+            </li>
+          </ul>
+        </div>
+      </div>
+
+      {/* Footer Bottom */}
+      <div className="footer-bottom">
+        <p>&copy; {currentYear} Shree Collection. All rights reserved.</p>
+        <p>Designed with <span className="heart">♥</span> for jewelry lovers</p>
+      </div>
+    </footer>
+  );
+};
+
+export default Footer;

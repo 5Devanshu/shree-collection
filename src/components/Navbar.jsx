@@ -212,6 +212,47 @@ const Navbar = () => {
             )}
           </Link>
 
+          {/* ── Terms & Conditions dropdown ──────────────────────────────────── */}
+          <div className="nav-dropdown">
+            <span
+              className="nav-link label-md"
+              style={{ cursor: 'pointer' }}
+              onClick={() => toggleDropdown('policies')}
+            >
+              Help
+            </span>
+            <div className={`dropdown-content dropdown-content--right ${openDropdown === 'policies' ? 'active' : ''}`}>
+              <Link
+                to="/terms"
+                className="dropdown-item label-md"
+                onClick={() => setOpenDropdown(null)}
+              >
+                Terms & Conditions
+              </Link>
+              <Link
+                to="/privacy"
+                className="dropdown-item label-md"
+                onClick={() => setOpenDropdown(null)}
+              >
+                Privacy Policy
+              </Link>
+              <Link
+                to="/shipping"
+                className="dropdown-item label-md"
+                onClick={() => setOpenDropdown(null)}
+              >
+                Shipping Policy
+              </Link>
+              <Link
+                to="/returns"
+                className="dropdown-item label-md"
+                onClick={() => setOpenDropdown(null)}
+              >
+                Return & Refund
+              </Link>
+            </div>
+          </div>
+
         </div>
       </div>
     </nav>
