@@ -71,7 +71,11 @@ export const StoreProvider = ({ children }) => {
     localStorage.removeItem('shree_products');
 
     fetchCategories()
-      .then(res => setCategories(res.data?.data || res.data || []))
+      .then(res => {
+        // Backend returns { success: true, categories: [...] }
+        const data = res.data?.categories || res.data?.data || res.data || [];
+        setCategories(Array.isArray(data) ? data : []);
+      })
       .catch(err => {
         console.error('Failed to fetch categories:', err);
         setCategories([]);
@@ -79,7 +83,11 @@ export const StoreProvider = ({ children }) => {
       .finally(() => setLoadingCats(false));
 
     fetchProducts({ limit: 100 })
-      .then(res => setProducts(res.data?.data || res.data || []))
+      .then(res => {
+        // Backend returns { success: true, data: [...], total, pages, ... }
+        const data = res.data?.data || res.data?.products || res.data || [];
+        setProducts(Array.isArray(data) ? data : []);
+      })
       .catch(err => {
         console.error('Failed to fetch products:', err);
         setProducts([]);
@@ -91,7 +99,8 @@ export const StoreProvider = ({ children }) => {
   const refreshProducts = async (params) => {
     try {
       const res = await fetchProducts({ limit: 100, ...params });
-      setProducts(res.data?.data || res.data || []);
+      const data = res.data?.data || res.data?.products || res.data || [];
+      setProducts(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to refresh products:', err);
     }
@@ -100,7 +109,8 @@ export const StoreProvider = ({ children }) => {
   const refreshCategories = async () => {
     try {
       const res = await fetchCategories();
-      setCategories(res.data?.data || res.data || []);
+      const data = res.data?.categories || res.data?.data || res.data || [];
+      setCategories(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to refresh categories:', err);
     }
@@ -109,14 +119,16 @@ export const StoreProvider = ({ children }) => {
   // ── Category CRUD ─────────────────────────────────────────────────────────
   const addCategory = async (data) => {
     const res = await apiCreateCategory(data);
-    setCategories(prev => [res.data.data, ...prev]);
-    return res.data.data;
+    const category = res.data?.category || res.data?.data || null;
+    if (category) setCategories(prev => [category, ...prev]);
+    return category;
   };
 
   const updateCategory = async (id, data) => {
     const res = await apiUpdateCategory(id, data);
-    setCategories(prev => prev.map(c => c._id === id ? res.data.data : c));
-    return res.data.data;
+    const category = res.data?.category || res.data?.data || null;
+    if (category) setCategories(prev => prev.map(c => c._id === id ? category : c));
+    return category;
   };
 
   const deleteCategory = async (id) => {
@@ -127,14 +139,16 @@ export const StoreProvider = ({ children }) => {
   // ── Product CRUD ──────────────────────────────────────────────────────────
   const addProduct = async (data) => {
     const res = await apiCreateProduct(data);
-    setProducts(prev => [res.data.data, ...prev]);
-    return res.data.data;
+    const product = res.data?.product || res.data?.data || null;
+    if (product) setProducts(prev => [product, ...prev]);
+    return product;
   };
 
   const updateProduct = async (id, data) => {
     const res = await apiUpdateProduct(id, data);
-    setProducts(prev => prev.map(p => p._id === id ? res.data.data : p));
-    return res.data.data;
+    const product = res.data?.product || res.data?.data || null;
+    if (product) setProducts(prev => prev.map(p => p._id === id ? product : p));
+    return product;
   };
 
   const deleteProduct = async (id) => {
