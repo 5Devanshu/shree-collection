@@ -112,5 +112,5 @@ export const updateOrderStatus = (id, data) => client.put(`/orders/${id}/status`
 export const fetchOrderStats   = ()       => client.get('/orders/stats');
 
 // ── Upload — both use same endpoint, admin token handles auth ─────────────────
-export const uploadImage         = (formData) => client.post('/upload', formData);
-export const uploadCategoryImage = (formData) => client.post('/upload', formData);
+export const uploadImage         = (formData) => client.post('/media/upload', formData);
+export const uploadCategoryImage = (formData) => client.post('/media/upload', formData);
