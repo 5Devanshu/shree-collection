@@ -58,9 +58,11 @@ const AdminDiscounts = () => {
     finally { setLoad(product._id, false); }
   };
 
-  const filtered = (Array.isArray(products) ? products : []).filter(p =>
-    p.title.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = (Array.isArray(products) ? products : []).filter(p => {
+    const title = (p.title ?? '').toLowerCase();
+    const query = search.toLowerCase();
+    return title.includes(query);
+  });
 
   return (
     <div className="admin-content">
