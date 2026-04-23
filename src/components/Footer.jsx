@@ -15,17 +15,14 @@ const Footer = () => {
             Luxury jewelry and accessories crafted with elegance and precision. Discover our exquisite collection of fine jewelry.
           </p>
           <div className="social-links">
-            <a href="https://facebook.com" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-              <i className="fab fa-facebook"></i>
+            <a href="https://www.youtube.com/@shreecollection_byaarya?si=JzQABtjVoHYNV1Yl" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+              <i className="fab fa-youtube"></i>
             </a>
-            <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+            <a href="https://www.instagram.com/shreecollection_byaarya?igsh=eDYyZjg3bW5jbHR4" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
               <i className="fab fa-instagram"></i>
             </a>
-            <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" aria-label="Twitter">
-              <i className="fab fa-twitter"></i>
-            </a>
-            <a href="https://youtube.com" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
-              <i className="fab fa-youtube"></i>
+            <a href="https://www.facebook.com/share/18VUQvxGWN/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+              <i className="fab fa-facebook"></i>
             </a>
           </div>
         </div>
@@ -71,6 +68,7 @@ const Footer = () => {
 
       {/* Footer Bottom */}
       <div className="footer-bottom">
+        <p>Thank You</p>
         <p>&copy; {currentYear} Shree Collection. All rights reserved.</p>
         <p>Designed with <span className="heart">♥</span> for jewelry lovers</p>
       </div>
