@@ -43,12 +43,9 @@ const Footer = () => {
 
         {/* Policies & Support */}
         <div className="footer-section">
-          <h4>Policies & Support</h4>
+          <h4>Policies</h4>
           <ul>
             <li><Link to="/terms">Terms & Conditions</Link></li>
-            <li><Link to="/privacy">Privacy Policy</Link></li>
-            <li><Link to="/shipping">Shipping Policy</Link></li>
-            <li><Link to="/returns">Return & Refund Policy</Link></li>
           </ul>
         </div>
 
