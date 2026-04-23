@@ -23,7 +23,9 @@ const ProductDescription = () => {
     setLoading(true);
     fetchProductById(id)
       .then(res => {
-        setProduct(res.data.data);
+        // Backend returns { success: true, product: {...} }
+        const data = res.data?.product || res.data?.data || res.data;
+        setProduct(data);
         setActiveImg(0);
       })
       .catch(console.error)
@@ -36,7 +38,8 @@ const ProductDescription = () => {
     
     const allImages = [
       ...(product.image ? [product.image] : []),
-      ...(product.images || []),
+      ...(Array.isArray(product.gallery) ? product.gallery : []),
+      ...(Array.isArray(product.images) ? product.images : []),
     ].filter(Boolean);
 
     const prev = () => setActiveImg(i => (i - 1 + allImages.length) % allImages.length);
@@ -64,15 +67,17 @@ const ProductDescription = () => {
   );
 
   // Build image gallery — main image + any gallery images
+  // Support both 'images' and 'gallery' field names for compatibility
   const allImages = [
     ...(product.image ? [product.image] : []),
-    ...(product.images || []),
+    ...(Array.isArray(product.gallery) ? product.gallery : []),
+    ...(Array.isArray(product.images) ? product.images : []),
   ].filter(Boolean);
 
   const hasDiscount  = product.discountEnabled && product.discountPercent > 0;
   const displayPrice = hasDiscount ? product.discountedPrice : product.price;
   const outOfStock   = product.stock === 0;
-  const category     = categories.find(c => c.slug === product.categorySlug);
+  const category     = (Array.isArray(categories) ? categories : []).find(c => c.slug === product.categorySlug);
 
   // Gallery navigation
   const prev = () => setActiveImg(i => (i - 1 + allImages.length) % allImages.length);

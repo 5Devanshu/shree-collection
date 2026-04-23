@@ -237,7 +237,7 @@ const ProductForm = ({ initial, categories, onSave, onCancel }) => {
           <label>Category *</label>
           <select value={form.categorySlug} onChange={e => set('categorySlug', e.target.value)}>
             <option value="">Select category…</option>
-            {categories.map(c => <option key={c._id} value={c.slug}>{c.name}</option>)}
+            {Array.isArray(categories) && categories.map(c => <option key={c._id} value={c.slug}>{c.name}</option>)}
           </select>
         </div>
         <div className="form-field">
@@ -317,7 +317,8 @@ const AdminProducts = () => {
     // Always fetch fresh so gallery is current from MongoDB
     try {
       const res = await fetchProductById(p._id);
-      const fresh = res.data.data;
+      // API returns { success: true, product: {...} }
+      const fresh = res.data?.product || res.data?.data || res.data;
       setEditing({ ...fresh, gallery: Array.isArray(fresh.gallery) ? fresh.gallery : [] });
     } catch {
       setEditing({ ...p, gallery: Array.isArray(p.gallery) ? p.gallery : [] });
@@ -372,7 +373,7 @@ const AdminProducts = () => {
             backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
         >
           <option value="">All Categories</option>
-          {categories.map(c => <option key={c._id} value={c.slug}>{c.name}</option>)}
+          {Array.isArray(categories) && categories.map(c => <option key={c._id} value={c.slug}>{c.name}</option>)}
         </select>
       </div>
 

@@ -114,7 +114,7 @@ export const deleteCategory   = (id)         => client.delete(`/categories/${id}
 export const fetchProducts    = (params)     => client.get('/products', { params });
 export const fetchProductById = (id)         => client.get(`/products/${id}`);
 export const createProduct    = (data)       => client.post('/products', data);
-export const updateProduct = (id, data) => client.put(`/products/${id}`, data);
+export const updateProduct = (id, data) => client.patch(`/products/${id}`, data);
 export const deleteProduct    = (id)         => client.delete(`/products/${id}`);
 export const toggleFeatured   = (id)         => client.patch(`/products/${id}/featured`);
 
