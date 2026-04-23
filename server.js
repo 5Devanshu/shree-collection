@@ -8,12 +8,22 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Serve static files from the dist directory
-app.use(express.static(path.join(__dirname, 'dist')));
+// ✅ SPA Routing Fix: Middleware to handle client-side routes
+// This middleware intercepts requests and checks if they're actual files
+// If not, it serves index.html so React Router can handle the route
 
-// SPA fallback: For any route that doesn't match a file in dist,
-// serve index.html so React Router can handle client-side routing
-app.get('*', (req, res) => {
+// 1. Serve actual static files (CSS, JS, images, etc.)
+app.use(express.static(path.join(__dirname, 'dist'), {
+  // maxAge helps with caching
+  maxAge: '1d',
+  etag: false
+}));
+
+// 2. SPA Fallback: Any request that's not a static file gets index.html
+// This allows React Router to handle client-side routing
+app.use((req, res, next) => {
+  // If the file was found in static, express already sent it
+  // This middleware only runs if no static file was found
   res.sendFile(path.join(__dirname, 'dist', 'index.html'));
 });
 

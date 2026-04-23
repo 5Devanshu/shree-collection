@@ -8,8 +8,9 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist
-dist-ssr
+# dist - REMOVED to allow production builds to be deployed
+# dist - Keep dist/ included so Railway can serve built files
+# dist-ssr
 *.local
 
 # Editor directories and files
