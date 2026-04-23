@@ -1,6 +1,6 @@
 .footer {
-  background: linear-gradient(135deg, #2c1810 0%, #1a0f08 100%);
-  color: #f0ebe5;
+  background: linear-gradient(135deg, #d4af37 0%, #c9a961 100%);
+  color: #ffffff;
   padding: 60px 20px 20px 20px;
   margin-top: 80px;
 }
@@ -21,7 +21,7 @@
 
 .footer-section h3 {
   font-size: 1.5rem;
-  color: #d4af7f;
+  color: #ffffff;
   margin-bottom: 15px;
   font-weight: 700;
   letter-spacing: 0.5px;
@@ -29,13 +29,13 @@
 
 .footer-section h4 {
   font-size: 1.1rem;
-  color: #d4af7f;
+  color: #ffffff;
   margin-bottom: 15px;
   font-weight: 600;
 }
 
 .footer-section p {
-  color: #c0b5a3;
+  color: #ffffff;
   font-size: 0.95rem;
   line-height: 1.6;
   margin-bottom: 15px;
@@ -52,19 +52,19 @@
 }
 
 .footer-section ul li a {
-  color: #c0b5a3;
+  color: #ffffff;
   text-decoration: none;
   font-size: 0.95rem;
   transition: color 0.3s ease, text-decoration 0.3s ease;
 }
 
 .footer-section ul li a:hover {
-  color: #d4af7f;
+  color: #000000;
   text-decoration: underline;
 }
 
 .footer-section ul li strong {
-  color: #d4af7f;
+  color: #ffffff;
   display: block;
   margin-bottom: 5px;
 }
@@ -81,33 +81,33 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(212, 175, 127, 0.15);
+  background: rgba(255, 255, 255, 0.2);
   border-radius: 50%;
-  color: #d4af7f;
+  color: #ffffff;
   transition: all 0.3s ease;
   font-size: 1.1rem;
 }
 
 .social-links a:hover {
-  background: #d4af7f;
-  color: #2c1810;
+  background: #ffffff;
+  color: #d4af37;
   transform: translateY(-3px);
 }
 
 .footer-bottom {
-  border-top: 1px solid rgba(212, 175, 127, 0.2);
+  border-top: 1px solid rgba(255, 255, 255, 0.3);
   padding-top: 25px;
   text-align: center;
 }
 
 .footer-bottom p {
-  color: #9d8a78;
+  color: #ffffff;
   font-size: 0.9rem;
   margin: 8px 0;
 }
 
 .footer-bottom .heart {
-  color: #d4af7f;
+  color: #ffffff;
   animation: heartbeat 1.5s ease-in-out infinite;
 }
 
