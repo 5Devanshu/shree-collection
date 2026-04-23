@@ -55,7 +55,7 @@ const ProductForm = ({ initial, categories, onSave, onCancel }) => {
       const fd = new FormData();
       fd.append('image', file);
       const res = await uploadImage(fd);
-      set('image', res.data.url);
+      set('image', res.data.media.secureUrl);
       setStatus('✓ Main image uploaded');
       setTimeout(() => setStatus(''), 2000);
     } catch (err) {
@@ -79,7 +79,7 @@ const ProductForm = ({ initial, categories, onSave, onCancel }) => {
           const fd = new FormData();
           fd.append('image', file);
           const res = await uploadImage(fd);
-          return res.data.url;
+          return res.data.media.secureUrl;
         })
       );
 
