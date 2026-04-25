@@ -63,7 +63,7 @@ const Footer = () => {
               <strong>Hours:</strong> Mon-Sun, 10 AM - 6 PM IST
             </li>
             <li>
-              <strong>Name</strong> Mon-Sun, 10 AM - 6 PM IST
+              <strong>Name</strong> Aarya Yograj Rajpurkar
             </li>
           </ul>
         </div>
