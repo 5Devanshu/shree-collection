@@ -54,7 +54,7 @@ const Footer = () => {
               <strong>Email:</strong> <a href="mailto:shreecollection3006@gmail.com">shreecollection3006@gmail.com</a>
             </li>
             <li>
-              <strong>Phone:</strong> <a href="tel:+919876543210">+91 93264 27627</a>
+              <strong>Phone:</strong> <a href="tel:+91 93264 27627">+91 93264 27627</a>
             </li>
             <li>
               <strong>Address:</strong> Shree Collection, India
