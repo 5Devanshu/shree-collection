@@ -73,16 +73,7 @@ const Navbar = () => {
               >
                 All Pieces
               </Link>
-              {(Array.isArray(categories) ? categories : []).map(cat => (
-                <Link
-                  key={cat._id}
-                  to={`/collections/${cat.slug}`}
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  {cat.name}
-                </Link>
-              ))}
+
             </div>
           </div>
           <Link to="/" className="nav-link label-md">Home</Link>

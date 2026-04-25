@@ -62,6 +62,9 @@ const Footer = () => {
             <li>
               <strong>Hours:</strong> Mon-Sun, 10 AM - 6 PM IST
             </li>
+            <li>
+              <strong>Name</strong> Mon-Sun, 10 AM - 6 PM IST
+            </li>
           </ul>
         </div>
       </div>

@@ -15,7 +15,6 @@ const Hero = () => {
         </p>
         <div className="hero-actions">
           <Button variant="primary">Explore Collection</Button>
-          <Button variant="tertiary">View Lookbook</Button>
         </div>
       </div>
       <div className="hero-image-wrapper">
