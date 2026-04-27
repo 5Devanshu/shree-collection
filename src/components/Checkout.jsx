@@ -8,11 +8,12 @@ import './Checkout.css';
 const Checkout = () => {
   const navigate                            = useNavigate();
   const { cart, cartTotal, cartCount, removeFromCart, updateCartQty, clearCart } = useStore();
-  const { customer, isLoggedIn }            = useCustomer();
+  const { customer, isLoggedIn, logout }    = useCustomer();
   const [placing, setPlacing]               = useState(false);
   const [error, setError]                   = useState('');
+  const [guestMode, setGuestMode]           = useState(!isLoggedIn);  // ✅ Explicit guest mode tracking
 
-  // ── Pre-fill from customer profile if logged in ───────────────────────────
+  // ── Pre-fill from customer profile if logged in (and not in guest mode) ────
   const [form, setForm] = useState({
     email:    '',
     name:     '',
@@ -27,7 +28,7 @@ const Checkout = () => {
   const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
 
   useEffect(() => {
-    if (isLoggedIn && customer) {
+    if (isLoggedIn && customer && !guestMode) {  // ✅ Pre-fill only if logged in AND not in guest mode
       setForm(prev => ({
         ...prev,
         email: customer.email || '',
@@ -35,7 +36,7 @@ const Checkout = () => {
         phone: customer.phone || '',
       }));
     }
-  }, [isLoggedIn, customer]);
+  }, [isLoggedIn, customer, guestMode]);
 
   // ── Calculate shipping charges ────────────────────────────────────────────
   const SHIPPING_THRESHOLD = 500;
@@ -103,7 +104,7 @@ const Checkout = () => {
           image: item.image || '',
         })),
         shippingCost: shippingCost,
-        isGuestOrder: !isLoggedIn,
+        isGuestOrder: guestMode,  // ✅ Use explicit guestMode flag
       };
 
       // Create demo order (no payment gateway)
@@ -138,6 +139,50 @@ const Checkout = () => {
           </p>
 
           <form onSubmit={handlePlaceOrder}>
+
+            {/* Checkout Mode Toggle - if logged in */}
+            {isLoggedIn && (
+              <div className="checkout-section" style={{ marginBottom: '1.5rem' }}>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    onClick={() => setGuestMode(false)}
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      border: guestMode ? '1px solid #d0c5af' : '2px solid #735c00',
+                      background: guestMode ? 'transparent' : 'rgba(115, 92, 0, 0.05)',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: guestMode ? 400 : 600,
+                      color: guestMode ? '#7f7663' : '#735c00',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    Account Checkout
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGuestMode(true)}
+                    style={{
+                      flex: 1,
+                      padding: '12px 16px',
+                      border: guestMode ? '2px solid #735c00' : '1px solid #d0c5af',
+                      background: guestMode ? 'rgba(115, 92, 0, 0.05)' : 'transparent',
+                      borderRadius: '4px',
+                      cursor: 'pointer',
+                      fontSize: '0.875rem',
+                      fontWeight: guestMode ? 600 : 400,
+                      color: guestMode ? '#735c00' : '#7f7663',
+                      transition: 'all 0.2s',
+                    }}
+                  >
+                    Guest Checkout
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Contact */}
             <div className="checkout-section">
