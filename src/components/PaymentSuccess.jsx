@@ -21,20 +21,42 @@ const PaymentSuccess = () => {
         }
 
         // Verify payment status with backend
-        const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/orders/${orderId}/payment/verify`
-        );
+        // Build URL - handle /api/ deduplication
+        let baseUrl = import.meta.env.VITE_API_URL || '';
+        
+        // Remove trailing slash if present
+        if (baseUrl.endsWith('/')) {
+          baseUrl = baseUrl.slice(0, -1);
+        }
+        
+        // Remove duplicate /api if present (defensive programming)
+        baseUrl = baseUrl.replace('/api/api', '/api');
+        
+        // Ensure /api prefix
+        if (!baseUrl.includes('/api')) {
+          baseUrl += '/api';
+        }
+        
+        const verifyUrl = `${baseUrl}/orders/${orderId}/payment/verify`;
+        
+        console.log('[PaymentSuccess] Order ID:', orderId);
+        console.log('[PaymentSuccess] Verify URL:', verifyUrl);
+        
+        const response = await fetch(verifyUrl);
 
         const data = await response.json();
+        
+        console.log('[PaymentSuccess] Response:', data);
 
         if (data.success) {
           setOrderDetails(data.data);
           setStatus(data.data.paymentStatus === 'paid' ? 'success' : 'pending');
         } else {
           setStatus('error');
+          console.error('[PaymentSuccess] Error:', data.message);
         }
       } catch (error) {
-        console.error('Payment verification failed:', error);
+        console.error('[PaymentSuccess] Verification failed:', error);
         setStatus('error');
       } finally {
         setLoading(false);
