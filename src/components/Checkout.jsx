@@ -61,7 +61,7 @@ const Checkout = () => {
     );
   }
 
-  // ── Place order handler (Demo flow) ────────────────────────────────────────
+  // ── Place order handler + Payment Gateway redirect ────────────────────────
   const handlePlaceOrder = async (e) => {
     e.preventDefault();
     setError('');
@@ -107,17 +107,39 @@ const Checkout = () => {
         isGuestOrder: guestMode,  // ✅ Use explicit guestMode flag
       };
 
-      // Create demo order (no payment gateway)
-      const response = await createDemoOrder(orderData);
+      // ✅ Step 1: Create order in database
+      const orderResponse = await createDemoOrder(orderData);
 
-      if (response.data.success) {
-        // Show success message
-        const orderNum = response.data.order?.orderNumber || response.data.data?.orderId || 'N/A';
-        alert(`✓ Order placed successfully!\n\nOrder ID: ${orderNum}\n\nConfirmation email will be sent to ${form.email}`);
+      if (orderResponse.data.success) {
+        const orderId = orderResponse.data.data?.orderId || orderResponse.data.data?.orderNumber || 'N/A';
+        
+        // ✅ Step 2: Initiate PhonePe payment gateway
+        const paymentInitUrl = `${import.meta.env.VITE_API_URL}/api/orders/${orderId}/payment/initiate`;
+        
+        try {
+          const paymentResponse = await fetch(paymentInitUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+          });
 
-        // Clear cart and redirect
-        clearCart();
-        navigate('/');
+          const paymentData = await paymentResponse.json();
+
+          if (paymentData.success && paymentData.data?.paymentUrl) {
+            // ✅ Step 3: Redirect to PhonePe payment page
+            window.location.href = paymentData.data.paymentUrl;
+          } else {
+            // Fallback: Show order success if payment initiation fails
+            alert(`✓ Order placed successfully!\n\nOrder ID: ${orderId}\n\nConfirmation email will be sent to ${form.email}\n\nNote: Payment gateway redirect failed. Please contact support.`);
+            clearCart();
+            navigate('/');
+          }
+        } catch (paymentErr) {
+          console.warn('Payment initiation error:', paymentErr);
+          // Fallback: Show order success if payment initiation fails
+          alert(`✓ Order placed successfully!\n\nOrder ID: ${orderId}\n\nConfirmation email will be sent to ${form.email}\n\nNote: Payment gateway temporarily unavailable. Please try again.`);
+          clearCart();
+          navigate('/');
+        }
       }
     } catch (err) {
       console.error('Order error:', err);
