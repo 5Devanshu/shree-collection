@@ -81,11 +81,13 @@ const Checkout = () => {
       }
 
       // Prepare order data in correct format for Order model
+      const nameParts = form.name.trim().split(' ');
       const orderData = {
         email: form.email,
+        phone: form.phone,
         shippingAddress: {
-          firstName: form.name.split(' ')[0],
-          lastName: form.name.split(' ').slice(1).join(' ') || form.name,
+          firstName: nameParts[0],
+          lastName: nameParts.slice(1).join(' ') || nameParts[0],
           addressLine1: form.line1,
           addressLine2: form.line2,
           city: form.city,
@@ -101,6 +103,7 @@ const Checkout = () => {
           image: item.image || '',
         })),
         shippingCost: shippingCost,
+        isGuestOrder: !isLoggedIn,
       };
 
       // Create demo order (no payment gateway)
