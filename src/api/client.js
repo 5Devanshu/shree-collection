@@ -145,3 +145,13 @@ export const fetchOrderStats   = ()       => client.get('/orders/stats');
 // ── Upload — both use same endpoint, admin token handles auth ─────────────────
 export const uploadImage         = (formData) => client.post('/media/upload', formData);
 export const uploadCategoryImage = (formData) => client.post('/media/upload', formData);
+
+// ── Payment — PhonePe ──────────────────────────────────────────────────────────
+export const initiatePhonePePayment = (data) => 
+  client.post('/payment/phonepe/initiate', data);
+  
+export const confirmPhonePePayment = (data) => 
+  client.post('/payment/phonepe/confirm', data);
+  
+export const checkPhonePePaymentStatus = (merchantTransactionId) => 
+  client.get(`/payment/phonepe/status/${merchantTransactionId}`);
