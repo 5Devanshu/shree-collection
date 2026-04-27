@@ -114,7 +114,8 @@ const Checkout = () => {
         const orderId = orderResponse.data.data?.orderId || orderResponse.data.data?.orderNumber || 'N/A';
         
         // ✅ Step 2: Initiate PhonePe payment gateway
-        const paymentInitUrl = `${import.meta.env.VITE_API_URL}/api/orders/${orderId}/payment/initiate`;
+        // NOTE: VITE_API_URL already includes /api, so don't repeat it
+        const paymentInitUrl = `${import.meta.env.VITE_API_URL}/orders/${orderId}/payment/initiate`;
         
         try {
           const paymentResponse = await fetch(paymentInitUrl, {

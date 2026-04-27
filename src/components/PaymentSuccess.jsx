@@ -22,7 +22,7 @@ const PaymentSuccess = () => {
 
         // Verify payment status with backend
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL}/api/orders/${orderId}/payment/verify`
+          `${import.meta.env.VITE_API_URL}/orders/${orderId}/payment/verify`
         );
 
         const data = await response.json();
