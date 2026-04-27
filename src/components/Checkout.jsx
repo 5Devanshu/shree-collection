@@ -80,24 +80,27 @@ const Checkout = () => {
         return;
       }
 
-      // Prepare order data
+      // Prepare order data in correct format for Order model
       const orderData = {
-        items: (Array.isArray(cart) ? cart : []).map(item => ({
-          productId: item._id,
-          qty: item.qty,
-        })),
-        customer: {
-          name: form.name,
-          email: form.email,
-          phone: form.phone,
-          address: {
-            line1: form.line1,
-            line2: form.line2,
-            city: form.city,
-            state: form.state,
-            pincode: form.pincode,
-          },
+        email: form.email,
+        shippingAddress: {
+          firstName: form.name.split(' ')[0],
+          lastName: form.name.split(' ').slice(1).join(' ') || form.name,
+          addressLine1: form.line1,
+          addressLine2: form.line2,
+          city: form.city,
+          postalCode: form.pincode,
+          country: 'India',
         },
+        items: (Array.isArray(cart) ? cart : []).map(item => ({
+          product: item._id,
+          title: item.title,
+          material: item.material || '',
+          price: item.price || 0,
+          quantity: item.qty || 1,
+          image: item.image || '',
+        })),
+        shippingCost: shippingCost,
       };
 
       // Create demo order (no payment gateway)
@@ -105,7 +108,8 @@ const Checkout = () => {
 
       if (response.data.success) {
         // Show success message
-        alert(`✓ Order placed successfully!\n\nOrder ID: ${response.data.data.orderId}\n\nConfirmation email will be sent to ${form.email}`);
+        const orderNum = response.data.order?.orderNumber || response.data.data?.orderId || 'N/A';
+        alert(`✓ Order placed successfully!\n\nOrder ID: ${orderNum}\n\nConfirmation email will be sent to ${form.email}`);
 
         // Clear cart and redirect
         clearCart();
