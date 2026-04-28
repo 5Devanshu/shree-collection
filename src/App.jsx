@@ -14,6 +14,7 @@ import PaymentSuccess       from './components/PaymentSuccess';
 import CustomerLogin        from './components/CustomerLogin';
 import CustomerRegister     from './components/CustomerRegister';
 import CustomerAccount      from './components/CustomerAccount';
+import AdminRegister        from './components/AdminRegister';
 import TermsAndConditions   from './components/TermsAndConditions';
 
 // Debug utilities (only in development/non-production)
@@ -39,6 +40,7 @@ function App() {
               {/* Single login page — routes to admin or customer automatically */}
               <Route path="/login"             element={<CustomerLogin />} />
               <Route path="/register"          element={<CustomerRegister />} />
+              <Route path="/admin/register"    element={<AdminRegister />} />
 
               {/* Customer account */}
               <Route path="/account"           element={<CustomerAccount />} />

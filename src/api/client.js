@@ -88,8 +88,9 @@ client.interceptors.response.use(
 export default client;
 
 // ── Auth — Admin ──────────────────────────────────────────────────────────────
-export const adminLogin  = (data) => client.post('/auth/login', data);
-export const adminLogout = ()     => {
+export const adminRegister = (data) => client.post('/auth/register', data);
+export const adminLogin    = (data) => client.post('/auth/login', data);
+export const adminLogout   = ()     => {
   localStorage.removeItem('shree_admin_token');
 };
 
