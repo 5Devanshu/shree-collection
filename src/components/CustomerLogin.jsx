@@ -34,7 +34,7 @@ const LoginPage = () => {
     } catch (adminErr) {
       // 401 means not an admin — try customer login
       // Any other status means something else went wrong
-      if (!adminErr.message.includes('Invalid')) {
+      if (adminErr.message && !adminErr.message.includes('Invalid')) {
         setError(adminErr.message);
         setLoading(false);
         return;
