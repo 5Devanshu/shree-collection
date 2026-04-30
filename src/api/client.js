@@ -150,7 +150,7 @@ export const createDemoOrder   = (data)   => client.post('/orders/demo', data);
 export const verifyPayment     = (id)     => client.post(`/orders/${id}/verify-payment`);
 export const fetchOrders       = (params) => client.get('/orders', { params });
 export const fetchOrderById    = (id)     => client.get(`/orders/${id}`);
-export const updateOrderStatus = (id, data) => client.put(`/orders/${id}/status`, data);
+export const updateOrderStatus = (id, data) => client.patch(`/orders/${id}/status`, data);
 export const fetchOrderStats   = ()       => client.get('/orders/stats');
 
 // ── Upload — both use same endpoint, admin token handles auth ─────────────────
