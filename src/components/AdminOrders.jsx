@@ -1,364 +1,287 @@
-import React, { useState, useEffect } from 'react';
-import { fetchOrders, fetchOrderById, updateOrderStatus } from '../api/client';
+import React, { useState, useEffect, useCallback } from 'react';
+import { fetchOrders, updateOrderStatus } from '../api/client';
 
-const STATUS_OPTIONS = ['pending', 'confirmed', 'shipped', 'delivered', 'cancelled'];
-
-const statusColor = (s) => {
-  if (s === 'delivered') return 'status-delivered';
-  if (s === 'shipped')   return 'status-shipped';
-  if (s === 'confirmed') return 'status-shipped';
-  if (s === 'cancelled') return 'status-pending';
-  return 'status-pending';
+const STATUS_COLOURS = {
+  pending:   'status-pending',
+  shipped:   'status-shipped',
+  delivered: 'status-delivered',
+  cancelled: 'status-pending',
 };
 
-const paymentColor = (s) => {
-  if (s === 'paid')     return 'status-delivered';
-  if (s === 'failed')   return 'status-pending';
-  if (s === 'refunded') return 'status-shipped';
-  return 'status-pending';
-};
+const AdminOrders = () => {
+  const [orders,      setOrders]      = useState([]);   // ← [] not undefined
+  const [loading,     setLoading]     = useState(true);
+  const [error,       setError]       = useState('');
+  const [statusFilter,setStatusFilter]= useState('');
+  const [page,        setPage]        = useState(1);
+  const [totalPages,  setTotalPages]  = useState(1);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [updatingId,  setUpdatingId]  = useState(null);
 
-// ── Order Detail Modal ─────────────────────────────────────────────────────────
-const OrderDetailModal = ({ orderId, onClose, onStatusUpdate }) => {
-  const [order,   setOrder]   = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error,   setError]   = useState('');
-  const [updating, setUpdating] = useState(false);
-  const [newStatus, setNewStatus] = useState('');
-
-  useEffect(() => {
-    fetchOrderById(orderId)
-      .then(res => {
-        setOrder(res.data.data);
-        setNewStatus(res.data.data.status);
-      })
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
-  }, [orderId]);
-
-  const handleStatusUpdate = async () => {
-    if (newStatus === order.status) return;
-    setUpdating(true);
+  // ── Fetch orders ──────────────────────────────────────────────────────────
+  const loadOrders = useCallback(async () => {
+    setLoading(true);
+    setError('');
     try {
-      await updateOrderStatus(order._id, { status: newStatus });
-      setOrder(prev => ({ ...prev, status: newStatus }));
-      onStatusUpdate();
+      const params = { page, limit: 20 };
+      if (statusFilter) params.status = statusFilter;
+
+      const res  = await fetchOrders(params);
+      const data = res.data;
+
+      // Backend returns { orders, total, page, limit } or { data: { orders } }
+      const list  = data?.orders || data?.data?.orders || data?.data || [];
+      const total = data?.total  || list.length;
+
+      setOrders(Array.isArray(list) ? list : []);
+      setTotalPages(Math.ceil(total / 20) || 1);
     } catch (err) {
-      alert(err.message);
+      setError(err?.response?.data?.message || 'Failed to load orders.');
+      setOrders([]);
     } finally {
-      setUpdating(false);
+      setLoading(false);
+    }
+  }, [page, statusFilter]);
+
+  useEffect(() => { loadOrders(); }, [loadOrders]);
+
+  // ── Update status ─────────────────────────────────────────────────────────
+  const handleStatusChange = async (orderId, newStatus) => {
+    setUpdatingId(orderId);
+    try {
+      await updateOrderStatus(orderId, { status: newStatus });
+      setOrders(prev =>
+        prev.map(o => o._id === orderId ? { ...o, status: newStatus } : o)
+      );
+      if (selectedOrder?._id === orderId) {
+        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+      }
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to update status.');
+    } finally {
+      setUpdatingId(null);
     }
   };
 
-  return (
-    <div
-      style={{
-        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-        background: 'rgba(26,28,28,0.6)', backdropFilter: 'blur(4px)',
-        zIndex: 9999, display: 'flex', alignItems: 'center',
-        justifyContent: 'center', padding: '1.5rem',
-      }}
-      onClick={onClose}
-    >
-      <div
-        style={{
-          background: '#fff', width: '100%', maxWidth: 720,
-          maxHeight: '90vh', overflow: 'hidden', display: 'flex',
-          flexDirection: 'column', border: '1px solid var(--outline-variant)',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
-        {/* Header */}
-        <div style={{
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          padding: '1.5rem 2rem', borderBottom: '1px solid var(--outline-variant)',
-          flexShrink: 0,
-        }}>
-          <div>
-            <h2 className="headline-md">Order Details</h2>
-            {order && (
-              <p style={{ fontSize: '0.78rem', color: 'var(--primary)', fontFamily: 'monospace', marginTop: 4 }}>
-                #{order._id.slice(-8).toUpperCase()}
-              </p>
-            )}
-          </div>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: 'var(--on-surface-variant)', padding: '4px 8px' }}>✕</button>
-        </div>
-
-        {/* Body */}
-        <div style={{ overflowY: 'auto', padding: '2rem', flex: 1 }}>
-          {loading && <p className="body-lg" style={{ color: 'var(--on-surface-variant)' }}>Loading order…</p>}
-          {error   && <p style={{ color: 'var(--on-error)' }}>{error}</p>}
-
-          {order && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-
-              {/* Status row */}
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                <span className={`status-badge ${statusColor(order.status)}`}>
-                  {order.status.toUpperCase()}
-                </span>
-                <span className={`status-badge ${paymentColor(order.paymentStatus)}`}>
-                  {order.paymentStatus.toUpperCase()}
-                </span>
-                <span style={{ fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>
-                  {new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </span>
-              </div>
-
-              {/* Update status */}
-              <div style={{
-                background: 'var(--surface-container-low)',
-                border: '1px solid var(--outline-variant)',
-                padding: '1rem 1.25rem',
-                display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap',
-              }}>
-                <span className="label-md">Update Status</span>
-                <select
-                  value={newStatus}
-                  onChange={e => setNewStatus(e.target.value)}
-                  style={{
-                    padding: '0.5rem 2rem 0.5rem 0.75rem',
-                    border: '1px solid var(--outline-variant)',
-                    background: '#fff', fontFamily: 'var(--font-sans)',
-                    fontSize: '0.85rem', cursor: 'pointer',
-                    appearance: 'none',
-                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237f7663' fill='none' stroke-width='1.5'/%3E%3C/svg%3E\")",
-                    backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
-                  }}
-                >
-                  {STATUS_OPTIONS.map(s => (
-                    <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-                  ))}
-                </select>
-                <button
-                  className="btn btn-primary"
-                  onClick={handleStatusUpdate}
-                  disabled={updating || newStatus === order.status}
-                  style={{ padding: '0.5rem 1.25rem', opacity: newStatus === order.status ? 0.5 : 1 }}
-                >
-                  {updating ? 'Updating…' : 'Update'}
-                </button>
-              </div>
-
-              {/* Two column layout */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
-
-                {/* Customer info */}
-                <div>
-                  <h3 className="label-md" style={{ marginBottom: '0.75rem', color: 'var(--on-surface-variant)', borderBottom: '1px solid var(--outline-variant)', paddingBottom: '0.5rem' }}>
-                    Customer
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    <p className="body-lg" style={{ fontWeight: 500 }}>{order.customer.name}</p>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)' }}>{order.customer.email}</p>
-                    <p style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)' }}>{order.customer.phone}</p>
-                  </div>
-                </div>
-
-                {/* Shipping address */}
-                <div>
-                  <h3 className="label-md" style={{ marginBottom: '0.75rem', color: 'var(--on-surface-variant)', borderBottom: '1px solid var(--outline-variant)', paddingBottom: '0.5rem' }}>
-                    Shipping Address
-                  </h3>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--on-surface)', lineHeight: 1.7 }}>
-                    <p>{order.customer.address.line1}</p>
-                    {order.customer.address.line2 && <p>{order.customer.address.line2}</p>}
-                    <p>{order.customer.address.city}, {order.customer.address.state}</p>
-                    <p>Pincode: {order.customer.address.pincode}</p>
-                  </div>
-                </div>
-
-              </div>
-
-              {/* Payment info */}
-              {order.cashfreeOrderId && (
-                <div>
-                  <h3 className="label-md" style={{ marginBottom: '0.75rem', color: 'var(--on-surface-variant)', borderBottom: '1px solid var(--outline-variant)', paddingBottom: '0.5rem' }}>
-                    Payment
-                  </h3>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
-                    {order.cashfreeOrderId    && <p>Cashfree Order ID: <code style={{ color: 'var(--primary)' }}>{order.cashfreeOrderId}</code></p>}
-                    {order.cashfreePaymentId  && <p>Payment ID: <code style={{ color: 'var(--primary)' }}>{order.cashfreePaymentId}</code></p>}
-                  </div>
-                </div>
-              )}
-
-              {/* Order items */}
-              <div>
-                <h3 className="label-md" style={{ marginBottom: '0.75rem', color: 'var(--on-surface-variant)', borderBottom: '1px solid var(--outline-variant)', paddingBottom: '0.5rem' }}>
-                  Items Ordered
-                </h3>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                  {(Array.isArray(order.items) ? order.items : []).map((item, i) => (
-                    <div key={i} style={{ display: 'flex', gap: '1rem', alignItems: 'center', padding: '0.75rem 0', borderBottom: '1px solid var(--surface-container-highest)' }}>
-                      {item.image && (
-                        <img src={item.image} alt={item.title} style={{ width: 56, height: 56, objectFit: 'cover', border: '1px solid var(--outline-variant)', flexShrink: 0 }} />
-                      )}
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <p className="body-lg" style={{ fontWeight: 500 }}>{item.title}</p>
-                        {item.material && <p style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{item.material}</p>}
-                        <p style={{ fontSize: '0.8rem', color: 'var(--on-surface-variant)', marginTop: 4 }}>Qty: {item.qty}</p>
-                      </div>
-                      <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                        <p className="body-lg" style={{ fontWeight: 500 }}>₹{(item.price * item.qty).toLocaleString('en-IN')}</p>
-                        <p style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>₹{item.price.toLocaleString('en-IN')} each</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Total */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: '1rem', marginTop: '0.5rem', borderTop: '2px solid var(--outline-variant)' }}>
-                  <span className="label-md">Order Total</span>
-                  <span className="headline-md" style={{ fontSize: '1.3rem', color: 'var(--primary)' }}>
-                    ₹{order.total.toLocaleString('en-IN')}
-                  </span>
-                </div>
-              </div>
-
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ── Main AdminOrders ───────────────────────────────────────────────────────────
-const AdminOrders = () => {
-  const [orders,       setOrders]       = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [error,        setError]        = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [viewingId,    setViewingId]    = useState(null);
-
-  const loadOrders = () => {
-    setLoading(true);
-    fetchOrders(filterStatus ? { status: filterStatus } : {})
-      .then(res => setOrders(res.data.data))
-      .catch(err => setError(err.message))
-      .finally(() => setLoading(false));
+  // ── Export CSV ────────────────────────────────────────────────────────────
+  const handleExportCSV = async () => {
+    try {
+      const token = localStorage.getItem('shree_admin_token');
+      const res   = await fetch(
+        `${import.meta.env.VITE_API_URL}/orders/export`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const blob = await res.blob();
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href     = url;
+      a.download = `orders_${Date.now()}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      alert('CSV export failed.');
+    }
   };
 
-  useEffect(() => { loadOrders(); }, [filterStatus]);
-
-  const exportCSV = () => {
-    const headers = ['Order ID', 'Customer', 'Email', 'Phone', 'City', 'State', 'Pincode', 'Status', 'Payment', 'Total', 'Date'];
-    const rows = (Array.isArray(orders) ? orders : []).map(o => [
-      o._id,
-      o.customer.name,
-      o.customer.email,
-      o.customer.phone,
-      o.customer.address.city,
-      o.customer.address.state,
-      o.customer.address.pincode,
-      o.status,
-      o.paymentStatus,
-      o.total,
-      new Date(o.createdAt).toLocaleDateString('en-IN'),
-    ]);
-    const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = `orders_${Date.now()}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // ── Format date ───────────────────────────────────────────────────────────
+  const formatDate = (iso) => {
+    if (!iso) return '—';
+    return new Date(iso).toLocaleDateString('en-IN', {
+      day: '2-digit', month: 'short', year: 'numeric',
+    });
   };
 
   return (
     <div className="admin-content">
+
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-6)', flexWrap: 'wrap', gap: '1rem' }}>
+      <div className="admin-page-header" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'var(--spacing-6)' }}>
         <h2 className="headline-md">All Orders</h2>
-        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+        <div style={{ display:'flex', gap:'var(--spacing-3)' }}>
           <select
-            value={filterStatus}
-            onChange={e => setFilterStatus(e.target.value)}
-            style={{
-              padding: '0.5rem 2rem 0.5rem 0.75rem',
-              border: '1px solid var(--outline-variant)',
-              background: '#fff', fontFamily: 'var(--font-sans)',
-              fontSize: '0.85rem', cursor: 'pointer', appearance: 'none',
-              backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237f7663' fill='none' stroke-width='1.5'/%3E%3C/svg%3E\")",
-              backgroundRepeat: 'no-repeat', backgroundPosition: 'right 8px center',
-            }}
+            value={statusFilter}
+            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+            style={{ padding:'var(--spacing-2) var(--spacing-4)', borderRadius:4, border:'1px solid var(--surface-container-highest)' }}
           >
             <option value="">All Statuses</option>
-            {STATUS_OPTIONS.map(s => (
-              <option key={s} value={s}>{s.charAt(0).toUpperCase() + s.slice(1)}</option>
-            ))}
+            <option value="pending">Pending</option>
+            <option value="shipped">Shipped</option>
+            <option value="delivered">Delivered</option>
+            <option value="cancelled">Cancelled</option>
           </select>
-          <button className="btn btn-secondary" onClick={exportCSV}
-            style={{ padding: 'var(--spacing-3) var(--spacing-6)' }}>
+          <button
+            className="btn btn-secondary"
+            onClick={handleExportCSV}
+            style={{ padding:'var(--spacing-2) var(--spacing-5)', borderRadius:4 }}
+          >
             Export CSV
           </button>
         </div>
       </div>
 
-      {error   && <p style={{ color: 'var(--on-error)', marginBottom: '1rem' }}>{error}</p>}
-      {loading && <p className="body-lg" style={{ color: 'var(--on-surface-variant)' }}>Loading orders…</p>}
+      {/* States */}
+      {loading && (
+        <p className="body-md" style={{ color:'var(--on-surface-variant)', padding:'var(--spacing-8)' }}>
+          Loading orders…
+        </p>
+      )}
+      {error && (
+        <p style={{ color:'#c0392b', padding:'var(--spacing-4)', background:'#fff0f0', borderRadius:4 }}>
+          {error}
+        </p>
+      )}
 
-      {!loading && (
-        <div className="recent-activity">
-          <table className="admin-table">
-            <thead>
-              <tr>
-                <th className="label-md">Order ID</th>
-                <th className="label-md">Customer</th>
-                <th className="label-md">Date</th>
-                <th className="label-md">Status</th>
-                <th className="label-md">Payment</th>
-                <th className="label-md">Total</th>
-                <th className="label-md">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {orders.length === 0 && (
+      {/* Table */}
+      {!loading && !error && (
+        <>
+          <div className="recent-activity" style={{ overflowX:'auto' }}>
+            <table className="admin-table" style={{ width:'100%' }}>
+              <thead>
                 <tr>
-                  <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-12)', color: 'var(--on-surface-variant)' }}>
-                    No orders found
-                  </td>
+                  <th className="label-md">Order #</th>
+                  <th className="label-md">Customer</th>
+                  <th className="label-md">Email</th>
+                  <th className="label-md">Date</th>
+                  <th className="label-md">Status</th>
+                  <th className="label-md">Payment</th>
+                  <th className="label-md">Total</th>
+                  <th className="label-md">Actions</th>
                 </tr>
-              )}
-              {(Array.isArray(orders) ? orders : []).map(o => (
-                <tr key={o._id}>
-                  <td>
-                    <code style={{ fontSize: '0.8rem', color: 'var(--primary)', fontFamily: 'monospace' }}>
-                      #{o._id.slice(-8).toUpperCase()}
-                    </code>
-                  </td>
-                  <td>
-                    <div className="body-lg" style={{ fontWeight: 500 }}>{o.customer.name}</div>
-                    <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>{o.customer.email}</div>
-                  </td>
-                  <td className="body-lg">
-                    {new Date(o.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  </td>
-                  <td><span className={`status-badge ${statusColor(o.status)}`}>{o.status}</span></td>
-                  <td><span className={`status-badge ${paymentColor(o.paymentStatus)}`}>{o.paymentStatus}</span></td>
-                  <td className="body-lg">₹{o.total.toLocaleString('en-IN')}</td>
-                  <td>
-                    <button className="btn btn-tertiary" onClick={() => setViewingId(o._id)}>
-                      View
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {orders.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} style={{ textAlign:'center', padding:'var(--spacing-8)', color:'var(--on-surface-variant)' }}>
+                      No orders found.
+                    </td>
+                  </tr>
+                ) : (
+                  orders.map(order => (
+                    <tr key={order._id}>
+                      <td className="body-md">
+                        {order.orderNumber || order._id?.slice(-6).toUpperCase()}
+                      </td>
+                      <td className="body-md">
+                        {order.shippingAddress
+                          ? `${order.shippingAddress.firstName || ''} ${order.shippingAddress.lastName || ''}`.trim()
+                          : order.guestName || '—'}
+                      </td>
+                      <td className="body-md">{order.email || order.guestEmail || '—'}</td>
+                      <td className="body-md">{formatDate(order.createdAt)}</td>
+                      <td>
+                        <span className={`status-badge ${STATUS_COLOURS[order.status] || 'status-pending'}`}>
+                          {order.status || 'pending'}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`status-badge ${order.paymentStatus === 'paid' ? 'status-delivered' : 'status-pending'}`}>
+                          {order.paymentStatus || 'unpaid'}
+                        </span>
+                      </td>
+                      <td className="body-md">
+                        ₹{(order.total || 0).toLocaleString('en-IN')}
+                      </td>
+                      <td style={{ display:'flex', gap:8 }}>
+                        <button
+                          className="btn btn-tertiary"
+                          onClick={() => setSelectedOrder(order)}
+                          style={{ fontSize:'0.8rem' }}
+                        >
+                          View
+                        </button>
+                        <select
+                          value={order.status || 'pending'}
+                          disabled={updatingId === order._id}
+                          onChange={e => handleStatusChange(order._id, e.target.value)}
+                          style={{ fontSize:'0.75rem', padding:'2px 6px', borderRadius:4, border:'1px solid var(--surface-container-highest)' }}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="shipped">Shipped</option>
+                          <option value="delivered">Delivered</option>
+                          <option value="cancelled">Cancelled</option>
+                        </select>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div style={{ display:'flex', gap:'var(--spacing-3)', justifyContent:'center', marginTop:'var(--spacing-6)' }}>
+              <button
+                className="btn btn-secondary"
+                disabled={page === 1}
+                onClick={() => setPage(p => p - 1)}
+              >← Prev</button>
+              <span className="body-md" style={{ alignSelf:'center' }}>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                className="btn btn-secondary"
+                disabled={page === totalPages}
+                onClick={() => setPage(p => p + 1)}
+              >Next →</button>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Order Detail Modal ──────────────────────────────────────────────── */}
+      {selectedOrder && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.5)',
+          display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000,
+        }}
+          onClick={e => { if (e.target === e.currentTarget) setSelectedOrder(null); }}
+        >
+          <div style={{
+            background:'var(--surface)', borderRadius:8, padding:'var(--spacing-8)',
+            width:'90%', maxWidth:600, maxHeight:'80vh', overflowY:'auto',
+          }}>
+            <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'var(--spacing-6)' }}>
+              <h3 className="headline-sm">Order Details</h3>
+              <button onClick={() => setSelectedOrder(null)} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer' }}>✕</button>
+            </div>
+
+            <p className="body-md"><strong>Order #:</strong> {selectedOrder.orderNumber || selectedOrder._id}</p>
+            <p className="body-md"><strong>Date:</strong> {formatDate(selectedOrder.createdAt)}</p>
+            <p className="body-md"><strong>Email:</strong> {selectedOrder.email || selectedOrder.guestEmail}</p>
+            <p className="body-md"><strong>Status:</strong> {selectedOrder.status}</p>
+            <p className="body-md"><strong>Payment:</strong> {selectedOrder.paymentStatus}</p>
+            <p className="body-md"><strong>Method:</strong> {selectedOrder.paymentMethod || '—'}</p>
+
+            {selectedOrder.shippingAddress && (
+              <>
+                <h4 className="label-lg" style={{ marginTop:'var(--spacing-4)' }}>Shipping Address</h4>
+                <p className="body-md">
+                  {selectedOrder.shippingAddress.firstName} {selectedOrder.shippingAddress.lastName}<br />
+                  {selectedOrder.shippingAddress.addressLine1}<br />
+                  {selectedOrder.shippingAddress.addressLine2 && <>{selectedOrder.shippingAddress.addressLine2}<br /></>}
+                  {selectedOrder.shippingAddress.city} — {selectedOrder.shippingAddress.postalCode}
+                </p>
+              </>
+            )}
+
+            <h4 className="label-lg" style={{ marginTop:'var(--spacing-4)' }}>Items</h4>
+            {(selectedOrder.items || []).map((item, i) => (
+              <div key={i} style={{ display:'flex', justifyContent:'space-between', padding:'var(--spacing-2) 0', borderBottom:'1px solid var(--surface-container-highest)' }}>
+                <span className="body-md">{item.title} × {item.quantity}</span>
+                <span className="body-md">₹{(item.price * item.quantity).toLocaleString('en-IN')}</span>
+              </div>
+            ))}
+
+            <div style={{ marginTop:'var(--spacing-4)', textAlign:'right' }}>
+              <p className="body-md">Subtotal: ₹{(selectedOrder.subtotal || 0).toLocaleString('en-IN')}</p>
+              <p className="body-md">Shipping: {selectedOrder.shippingCost > 0 ? `₹${selectedOrder.shippingCost}` : 'Complimentary'}</p>
+              <p className="label-lg">Total: ₹{(selectedOrder.total || 0).toLocaleString('en-IN')}</p>
+            </div>
+          </div>
         </div>
       )}
 
-      {viewingId && (
-        <OrderDetailModal
-          orderId={viewingId}
-          onClose={() => setViewingId(null)}
-          onStatusUpdate={loadOrders}
-        />
-      )}
     </div>
   );
 };
