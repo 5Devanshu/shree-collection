@@ -33,6 +33,7 @@ export const CustomerProvider = ({ children }) => {
   const register = async (data) => {
     const res = await apiRegister(data);
     localStorage.setItem('shree_customer_token', res.data.token);
+    localStorage.setItem('shree_session_id', res.data.sessionId);
     const customerData = res.data.customer;
     localStorage.setItem('shree_customer_id', customerData?.id || customerData?._id);
     setCustomer(customerData);
@@ -42,6 +43,7 @@ export const CustomerProvider = ({ children }) => {
   const login = async (data) => {
     const res = await apiLogin(data);
     localStorage.setItem('shree_customer_token', res.data.token);
+    localStorage.setItem('shree_session_id', res.data.sessionId);
     const customerData = res.data.customer;
     localStorage.setItem('shree_customer_id', customerData?.id || customerData?._id);
     setCustomer(customerData);
@@ -50,6 +52,7 @@ export const CustomerProvider = ({ children }) => {
 
   const logout = () => {
     localStorage.removeItem('shree_customer_token');
+    localStorage.removeItem('shree_session_id');
     localStorage.removeItem('shree_customer_id');
     setCustomer(null);
   };

@@ -12,6 +12,7 @@ const API_DEBUG = true; // Set to false to disable logging
 client.interceptors.request.use((config) => {
   const adminToken    = localStorage.getItem('shree_admin_token');
   const customerToken = localStorage.getItem('shree_customer_token');
+  const sessionId     = localStorage.getItem('shree_session_id');
 
   // Admin token takes priority — admin routes (upload, products, categories)
   // need the admin JWT, not the customer JWT
@@ -19,6 +20,11 @@ client.interceptors.request.use((config) => {
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+
+  // Add session ID if customer is logged in
+  if (sessionId) {
+    config.headers['x-session-id'] = sessionId;
   }
 
   // Let browser set Content-Type for FormData (includes multipart boundary)
@@ -33,6 +39,7 @@ client.interceptors.request.use((config) => {
       url: config.baseURL + config.url,
       hasToken: !!token,
       tokenType: adminToken ? 'admin' : (customerToken ? 'customer' : 'none'),
+      hasSessionId: !!sessionId,
     });
   }
 
@@ -95,15 +102,12 @@ export const adminLogout   = ()     => {
 };
 
 // ── Auth — Customer ───────────────────────────────────────────────────────────
-export const customerRegister = (data) => client.post('/customers/register', data);
-export const customerLogin    = (data) => client.post('/customers/login', data);
-export const getMyProfile     = ()     => client.get('/customers/me');
-export const updateMyProfile  = (data) => client.put('/customers/me', data);
-export const changePassword   = (data) => client.put('/customers/me/change-password', data);
-export const addAddress       = (data) => client.post('/customers/me/addresses', data);
-export const deleteAddress    = (id)   => client.delete(`/customers/me/addresses/${id}`);
-export const getMyOrders      = (params) => client.get('/customers/orders', { params });
-export const getMyOrderById   = (id)    => client.get(`/customers/orders/${id}`);
+export const customerRegister = (data) => client.post('/customer-auth/register', data);
+export const customerLogin    = (data) => client.post('/customer-auth/login', data);
+export const getMyProfile     = ()     => client.get('/customer-auth/me');
+export const updateMyProfile  = (data) => client.put('/customer-auth/profile', data);
+export const changePassword   = (data) => client.patch('/customer-auth/change-password', data);
+export const verifyCustomerToken = (token) => client.post('/customer-auth/verify-token', { token });
 
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
