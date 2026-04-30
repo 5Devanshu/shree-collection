@@ -41,12 +41,22 @@ const CheckoutCallback = () => {
           const saved = JSON.parse(sessionStorage.getItem('pendingOrder') || '{}');
 
           // Call /confirm to place the order in DB
-          const confirmRes = await fetch(`${API}/checkout/confirm`, {
-            method:  'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ merchantOrderId, ...saved }),
-          });
-
+// In CheckoutCallback.jsx — update the confirm call to match controller
+const confirmRes = await fetch(`${API}/payment/phonepe/confirm`, {
+  method:  'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    merchantTransactionId: saved.merchantTransactionId,
+    guestEmail:   saved.guestEmail,
+    guestPhone:   saved.guestPhone,
+    guestName:    saved.guestName,
+    guestAddress: saved.guestAddress,
+    items:        saved.items,
+    subtotal:     saved.subtotal,
+    shippingCost: saved.shippingCost,
+    total:        saved.total,
+  }),
+});
           const confirmData = await confirmRes.json();
 
           if (confirmData.success) {
