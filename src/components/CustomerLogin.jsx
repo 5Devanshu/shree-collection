@@ -1,51 +1,60 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useCustomer } from '../context/CustomerContext';
-import { adminLogin }  from '../api/client';
-import './CustomerAuth.css';
+import { useNavigate, Link } from 'react-router-dom';
+import { customerLogin, adminLogin } from '../api/client';
 
-const LoginPage = () => {
-  const { login }    = useCustomer();
-  const navigate     = useNavigate();
+const CustomerLogin = () => {
+  const navigate = useNavigate();
+
   const [form,    setForm]    = useState({ email: '', password: '' });
   const [error,   setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
-  const set = (field, val) => {
-    setForm(prev => ({ ...prev, [field]: val }));
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
     setError('');
   };
 
-  const handleSubmit = async (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
-    // ── Try admin first, then customer ────────────────────────────────────────
-    // Admin accounts are seeded once — if the email matches an admin
-    // the admin endpoint succeeds and we redirect to /admin
-    // If it fails with 401 we try the customer endpoint
-    // Any other error (network, server) surfaces immediately
+    const { email, password } = form;
+
+    // ── Step 1: Try customer login first ──────────────────────────────────
     try {
-      const res = await adminLogin(form);
-      localStorage.setItem('shree_admin_token', res.data.token);
-      navigate('/admin');
-      return;
-    } catch (adminErr) {
-      // 401 means not an admin — try customer login
-      // Any other status means something else went wrong
-      if (adminErr.message && !adminErr.message.includes('Invalid')) {
-        setError(adminErr.message);
+      const res = await customerLogin({ email, password }); // ✅ object, not two args
+
+      const { token, customer } = res.data;
+      localStorage.setItem('shree_customer_token', token);
+      localStorage.setItem('shree_customer_data',  JSON.stringify(customer));
+
+      navigate('/account');
+      return; // ✅ stop here — don't try admin
+    } catch (customerErr) {
+      // 400 = bad request (shouldn't happen now), 401 = wrong password
+      // Only try admin if customer account genuinely doesn't exist (404)
+      // For any other error just show the message
+      const status = customerErr?.response?.status;
+
+      if (status !== 404) {
+        // Customer account exists but password wrong, OR other error
+        setError('Invalid email or password');
         setLoading(false);
         return;
       }
     }
 
+    // ── Step 2: Only if customer not found (404), try admin login ─────────
     try {
-      await login(form);
-      navigate('/account/orders');
-    } catch (customerErr) {
-      // Both failed — show a single clean message
+      const res = await adminLogin({ email, password }); // ✅ object
+
+      const { token, admin } = res.data;
+      localStorage.setItem('shree_admin_token', token);
+      localStorage.setItem('shree_admin_data',  JSON.stringify(admin));
+
+      navigate('/admin');
+    } catch {
       setError('Invalid email or password');
     } finally {
       setLoading(false);
@@ -54,60 +63,58 @@ const LoginPage = () => {
 
   return (
     <div className="auth-page">
-      <div className="auth-card">
-        <h1 className="headline-md" style={{ marginBottom: 'var(--spacing-2)' }}>
-          Welcome back
-        </h1>
-        <p className="body-lg auth-subtitle">
-          Sign in to your Shree Collection account
-        </p>
+      <div className="auth-container">
+        <h1 className="display-sm">Welcome Back</h1>
+        <p className="body-md disclaimer">Sign in to your Shree Collection account.</p>
 
-        {error && (
-          <div className="auth-error" style={{ marginBottom: 'var(--spacing-6)' }}>
-            {error}
-          </div>
-        )}
+        {error && <div className="auth-error">{error}</div>}
 
-        <form className="auth-form" onSubmit={handleSubmit}>
-          <div className="auth-field">
-            <label>Email</label>
+        <form className="auth-form" onSubmit={onSubmit}>
+          <div className="form-group">
             <input
               type="email"
-              placeholder="your@email.com"
+              name="email"
               value={form.email}
-              onChange={e => set('email', e.target.value)}
+              onChange={handleChange}
+              placeholder="Email Address"
+              className="checkout-input"
               required
-              autoFocus
+              autoComplete="email"
             />
           </div>
 
-          <div className="auth-field">
-            <label>Password</label>
+          <div className="form-group">
             <input
               type="password"
-              placeholder="Min. 8 characters"
+              name="password"
               value={form.password}
-              onChange={e => set('password', e.target.value)}
-              autoComplete="current-password"
+              onChange={handleChange}
+              placeholder="Password"
+              className="checkout-input"
               required
+              autoComplete="current-password"
+              minLength={8}
             />
           </div>
 
           <button
             type="submit"
-            className="btn btn-primary auth-submit"
+            className="btn-primary complete-order-btn"
             disabled={loading}
           >
             {loading ? 'Signing in…' : 'Sign In'}
           </button>
         </form>
 
-        <p className="auth-footer">
-          Don't have an account? <Link to="/register">Create one</Link>
+        <p className="body-md" style={{ marginTop: '1.5rem', textAlign: 'center' }}>
+          Don't have an account?{' '}
+          <Link to="/register" style={{ color: 'var(--primary)' }}>
+            Create one
+          </Link>
         </p>
       </div>
     </div>
   );
 };
 
-export default LoginPage;
+export default CustomerLogin;
