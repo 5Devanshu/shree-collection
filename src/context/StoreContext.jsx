@@ -1,276 +1,124 @@
-/* eslint-disable react-refresh/only-export-components */
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import {
-  fetchCategories,
-  createCategory   as apiCreateCategory,
-  updateCategory   as apiUpdateCategory,
-  deleteCategory   as apiDeleteCategory,
-  fetchProducts,
-  createProduct    as apiCreateProduct,
-  updateProduct    as apiUpdateProduct,
-  deleteProduct    as apiDeleteProduct,
-} from '../api/client';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 
-const StoreContext = createContext();
+const StoreContext = createContext(null);
 
-// ── Helper: Get cart key based on user ID ──────────────────────────────────
-const getCartKey = (customerId) => {
-  // Only save cart for logged-in users
-  return customerId ? `shree_cart_${customerId}` : null;
-};
+const API = import.meta.env.VITE_API_URL || '/api';
 
-// ── Helper: Load cart from localStorage ────────────────────────────────────
-const loadCartFromStorage = (customerId) => {
-  try {
-    const key = getCartKey(customerId);
-    if (!key) return []; // No cart for guests
-    const stored = localStorage.getItem(key);
-    return stored ? JSON.parse(stored) : [];
-  } catch (err) {
-    console.error('Failed to load cart:', err);
-    return [];
+// ── One session ID for the entire app lifetime ───────────────────────────────
+// Created once, stored in localStorage, sent as header on every cart request
+const getOrCreateSessionId = () => {
+  let id = localStorage.getItem('cartSessionId');
+  if (!id) {
+    id = `sc_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    localStorage.setItem('cartSessionId', id);
   }
+  return id;
 };
 
-// ── Helper: Save cart to localStorage ──────────────────────────────────────
-const saveCartToStorage = (cart, customerId) => {
-  try {
-    const key = getCartKey(customerId);
-    if (!key) return; // Don't save for guests
-    localStorage.setItem(key, JSON.stringify(cart));
-  } catch (err) {
-    console.error('Failed to save cart:', err);
-  }
-};
+// Axios instance that always sends the session header
+const cartClient = axios.create({ baseURL: API });
+cartClient.interceptors.request.use((config) => {
+  config.headers['x-session-id'] = getOrCreateSessionId();
+  return config;
+});
 
 export const StoreProvider = ({ children }) => {
-  const [categories,   setCategories]   = useState([]);
-  const [products,     setProducts]     = useState([]);
-  const [cart,         setCart]         = useState([]);
-  const [loadingCats,  setLoadingCats]  = useState(true);
-  const [loadingProds, setLoadingProds] = useState(true);
+  const [cart,      setCart]      = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
+  const [cartCount, setCartCount] = useState(0);
+  const [cartLoading, setCartLoading] = useState(false);
 
-  // ── Load cart from localStorage on mount ──────────────────────────────────
-  useEffect(() => {
-    // Only restore cart if user is logged in
-    const token = localStorage.getItem('shree_customer_token');
-    if (token) {
-      const customerId = localStorage.getItem('shree_customer_id');
-      const savedCart = loadCartFromStorage(customerId);
-      setCart(savedCart);
-    } else {
-      // Guest users start with empty cart (not persistent)
-      setCart([]);
-    }
-  }, []);
-
-  // ── Always fetch fresh from API — never use localStorage ─────────────────
-  useEffect(() => {
-    // Clear any old localStorage seed data that might interfere
-    localStorage.removeItem('shree_categories');
-    localStorage.removeItem('shree_products');
-
-    fetchCategories()
-      .then(res => {
-        // Backend returns { success: true, categories: [...] }
-        const data = res.data?.categories || res.data?.data || res.data || [];
-        setCategories(Array.isArray(data) ? data : []);
-      })
-      .catch(err => {
-        console.error('Failed to fetch categories:', err);
-        setCategories([]);
-      })
-      .finally(() => setLoadingCats(false));
-
-    fetchProducts({ limit: 100 })
-      .then(res => {
-        // Backend returns { success: true, data: [...], total, pages, ... }
-        const data = res.data?.data || res.data?.products || res.data || [];
-        setProducts(Array.isArray(data) ? data : []);
-      })
-      .catch(err => {
-        console.error('Failed to fetch products:', err);
-        setProducts([]);
-      })
-      .finally(() => setLoadingProds(false));
-  }, []);
-
-  // ── Refresh — call this after any stock/discount update ───────────────────
-  const refreshProducts = async (params) => {
+  // ── Fetch full cart (used by Checkout) ───────────────────────────────────
+  const fetchCart = useCallback(async () => {
+    setCartLoading(true);
     try {
-      const res = await fetchProducts({ limit: 100, ...params });
-      const data = res.data?.data || res.data?.products || res.data || [];
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to refresh products:', err);
-    }
-  };
-
-  const refreshCategories = async () => {
-    try {
-      const res = await fetchCategories();
-      const data = res.data?.categories || res.data?.data || res.data || [];
-      setCategories(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('Failed to refresh categories:', err);
-    }
-  };
-
-  // ── Category CRUD ─────────────────────────────────────────────────────────
-  const addCategory = async (data) => {
-    const res = await apiCreateCategory(data);
-    const category = res.data?.category || res.data?.data || null;
-    if (category) setCategories(prev => [category, ...prev]);
-    return category;
-  };
-
-  const updateCategory = async (id, data) => {
-    const res = await apiUpdateCategory(id, data);
-    const category = res.data?.category || res.data?.data || null;
-    if (category) setCategories(prev => prev.map(c => c._id === id ? category : c));
-    return category;
-  };
-
-  const deleteCategory = async (id) => {
-    await apiDeleteCategory(id);
-    setCategories(prev => prev.filter(c => c._id !== id));
-  };
-
-  // ── Product CRUD ──────────────────────────────────────────────────────────
-  const transformProductData = (formData) => {
-    // Frontend uses categorySlug, but backend needs category ObjectId
-    const categoryObj = categories.find(c => c.slug === formData.categorySlug);
-    const categoryId = categoryObj?._id || formData.categorySlug;
-
-    // Transform frontend form structure to backend schema structure
-    return {
-      title: formData.title,
-      description: formData.description || '',
-      material: formData.material || '',
-      price: formData.price,
-      image: {
-        url: formData.image || '',
-        publicId: '', // Will be set by backend if Cloudinary
-      },
-      category: categoryId,
-      isFeatured: formData.featured ?? false,
-      gallery: formData.gallery || [],
-      details: formData.details || [],
-      stock: formData.stock || 0,
-    };
-  };
-
-  const addProduct = async (data) => {
-    const transformed = transformProductData(data);
-    const res = await apiCreateProduct(transformed);
-    const product = res.data?.product || res.data?.data || null;
-    if (product) setProducts(prev => [product, ...prev]);
-    return product;
-  };
-
-  const updateProduct = async (id, data) => {
-    const transformed = transformProductData(data);
-    const res = await apiUpdateProduct(id, transformed);
-    const product = res.data?.product || res.data?.data || null;
-    if (product) setProducts(prev => prev.map(p => p._id === id ? product : p));
-    return product;
-  };
-
-  const deleteProduct = async (id) => {
-    await apiDeleteProduct(id);
-    setProducts(prev => prev.filter(p => p._id !== id));
-  };
-
-  // ── Cart ──────────────────────────────────────────────────────────────────
-  const getCurrentUserId = () => {
-    const token = localStorage.getItem('shree_customer_token');
-    return token ? localStorage.getItem('shree_customer_id') : null;
-  };
-
-  const addToCart = (product) => {
-    // Only save to cart if user is logged in
-    const userId = getCurrentUserId();
-    if (!userId) {
-      alert('Please log in to save items to your cart.');
-      return;
-    }
-
-    setCart(prev => {
-      const existing = prev.find(i => i._id === product._id);
-      const newCart = existing
-        ? prev.map(i => i._id === product._id ? { ...i, qty: i.qty + 1 } : i)
-        : [...prev, { ...product, qty: 1 }];
-      saveCartToStorage(newCart, userId);
-      return newCart;
-    });
-  };
-
-  const removeFromCart = (id) => {
-    const userId = getCurrentUserId();
-    setCart(prev => {
-      const newCart = prev.filter(i => i._id !== id);
-      if (userId) {
-        saveCartToStorage(newCart, userId);
+      const res = await cartClient.get('/cart');
+      if (res.data.success) {
+        setCart(res.data.cart);
+        const count = res.data.cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+        setCartCount(count);
       }
-      return newCart;
-    });
-  };
-
-  const updateCartQty = (id, qty) => {
-    const userId = getCurrentUserId();
-    if (qty <= 0) {
-      removeFromCart(id);
-    } else {
-      setCart(prev => {
-        const newCart = prev.map(i => i._id === id ? { ...i, qty } : i);
-        if (userId) {
-          saveCartToStorage(newCart, userId);
-        }
-        return newCart;
-      });
+    } catch (err) {
+      console.error('Cart fetch error:', err?.response?.data || err.message);
+    } finally {
+      setCartLoading(false);
     }
-  };
+  }, []);
 
-  const clearCart = () => {
-    const userId = getCurrentUserId();
-    setCart([]);
-    if (userId) {
-      saveCartToStorage([], userId);
+  // ── Fetch count only (used by Navbar) ────────────────────────────────────
+  const fetchCartCount = useCallback(async () => {
+    try {
+      const res = await cartClient.get('/cart/count');
+      if (res.data.success) setCartCount(res.data.count || 0);
+    } catch { /* silent */ }
+  }, []);
+
+  // ── Add to cart ──────────────────────────────────────────────────────────
+  const addToCart = useCallback(async (productId, quantity = 1) => {
+    try {
+      const res = await cartClient.post('/cart/add', { productId, quantity });
+      if (res.data.success) {
+        setCart(res.data.cart);
+        setCartCount(res.data.count || 0);
+      }
+      return res.data;
+    } catch (err) {
+      throw err?.response?.data || err;
     }
-  };
+  }, []);
 
-  const cartCount = cart.reduce((sum, i) => sum + i.qty, 0);
-  const cartTotal = cart.reduce((sum, i) => {
-    const price = i.discountEnabled && i.discountedPrice ? i.discountedPrice : i.price;
-    return sum + price * i.qty;
-  }, 0);
+  // ── Update quantity ──────────────────────────────────────────────────────
+  const updateCartItem = useCallback(async (productId, quantity) => {
+    try {
+      const res = await cartClient.patch(`/cart/item/${productId}`, { quantity });
+      if (res.data.success) {
+        setCart(res.data.cart);
+        const count = res.data.cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+        setCartCount(count);
+      }
+    } catch (err) {
+      throw err?.response?.data || err;
+    }
+  }, []);
 
-  // ── Selectors ─────────────────────────────────────────────────────────────
-  const getProductsByCategory = (slug) =>
-    slug && slug !== 'all' ? products.filter(p => p.categorySlug === slug) : products;
+  // ── Remove item ──────────────────────────────────────────────────────────
+  const removeFromCart = useCallback(async (productId) => {
+    try {
+      const res = await cartClient.delete(`/cart/item/${productId}`);
+      if (res.data.success) {
+        setCart(res.data.cart);
+        const count = res.data.cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
+        setCartCount(count);
+      }
+    } catch (err) {
+      throw err?.response?.data || err;
+    }
+  }, []);
 
-  const getFeaturedProducts = () => products.filter(p => p.featured === true);
+  // ── Clear cart (call after successful order) ─────────────────────────────
+  const clearCart = useCallback(async () => {
+    try {
+      await cartClient.delete('/cart/clear');
+      setCart({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
+      setCartCount(0);
+    } catch { /* silent */ }
+  }, []);
 
-  const getProductById = (id) =>
-    products.find(p => p._id === id || p._id === String(id));
-
-  const getProductCountForCategory = (slug) =>
-    products.filter(p => p.categorySlug === slug).length;
+  // Load count on mount
+  useEffect(() => { fetchCartCount(); }, [fetchCartCount]);
 
   return (
     <StoreContext.Provider value={{
-      categories,   loadingCats,
-      products,     loadingProds,
-      cart,         cartCount, cartTotal,
-
-      addCategory,    updateCategory,    deleteCategory,
-      addProduct,     updateProduct,     deleteProduct,
-      refreshProducts, refreshCategories,
-
-      addToCart, removeFromCart, updateCartQty, clearCart,
-
-      getProductsByCategory, getFeaturedProducts,
-      getProductById,        getProductCountForCategory,
+      cart,
+      cartCount,
+      cartLoading,
+      sessionId: getOrCreateSessionId(),  // expose for Checkout.jsx
+      fetchCart,
+      fetchCartCount,
+      addToCart,
+      updateCartItem,
+      removeFromCart,
+      clearCart,
     }}>
       {children}
     </StoreContext.Provider>
@@ -279,6 +127,8 @@ export const StoreProvider = ({ children }) => {
 
 export const useStore = () => {
   const ctx = useContext(StoreContext);
-  if (!ctx) throw new Error('useStore must be used within StoreProvider');
+  if (!ctx) throw new Error('useStore must be used inside <StoreProvider>');
   return ctx;
 };
+
+export default StoreContext;
