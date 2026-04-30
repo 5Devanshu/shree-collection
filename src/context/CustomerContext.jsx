@@ -32,27 +32,41 @@ export const CustomerProvider = ({ children }) => {
   const [customer, setCustomer] = useState(null);
   const [loading,  setLoading]  = useState(true);
 
-  // Restore session from localStorage on mount
-  useEffect(() => {
-    const token          = localStorage.getItem('customerToken');
-    const storedCustomer = localStorage.getItem('customerData');
-    if (token && storedCustomer) {
-      try { setCustomer(JSON.parse(storedCustomer)); }
-      catch { localStorage.removeItem('customerToken'); localStorage.removeItem('customerData'); }
+// ── Restore session on mount ─────────────────────────────────────────────────
+useEffect(() => {
+  const token    = localStorage.getItem('shree_customer_token');  // ← correct key
+  const stored   = localStorage.getItem('shree_customer_data');   // ← correct key
+
+  if (token && stored) {
+    try {
+      setCustomer(JSON.parse(stored));
+    } catch {
+      localStorage.removeItem('shree_customer_token');
+      localStorage.removeItem('shree_customer_data');
     }
-    setLoading(false);
-  }, []);
+  }
+  setLoading(false);
+}, []);
 
   // ── Login ──────────────────────────────────────────────────────────────────
   // ✅ /api/customer-auth/login  (matches server.js: app.use('/api/customer-auth', customerAuthRoutes))
-  const login = useCallback(async (email, password) => {
-    const res = await client.post('/customer-auth/login', { email, password });
-    const { token, customer: userData } = res.data;
-    localStorage.setItem('customerToken', token);
-    localStorage.setItem('customerData',  JSON.stringify(userData));
-    setCustomer(userData);
-    return res.data;
-  }, []);
+// ── Login ────────────────────────────────────────────────────────────────────
+const login = useCallback(async (email, password) => {
+  const res = await client.post('/customer-auth/login', { email, password });
+  const { token, customer: userData } = res.data;
+
+  localStorage.setItem('shree_customer_token', token);           // ← correct key
+  localStorage.setItem('shree_customer_data',  JSON.stringify(userData)); // ← correct key
+  setCustomer(userData);
+  return res.data;
+}, []);
+
+// ── Logout ───────────────────────────────────────────────────────────────────
+const logout = useCallback(() => {
+  localStorage.removeItem('shree_customer_token');               // ← correct key
+  localStorage.removeItem('shree_customer_data');                // ← correct key
+  setCustomer(null);
+}, []);
 
   // ── Register ───────────────────────────────────────────────────────────────
   // ✅ /api/customer-auth/register
@@ -65,12 +79,7 @@ export const CustomerProvider = ({ children }) => {
     return res.data;
   }, []);
 
-  // ── Logout ─────────────────────────────────────────────────────────────────
-  const logout = useCallback(() => {
-    localStorage.removeItem('customerToken');
-    localStorage.removeItem('customerData');
-    setCustomer(null);
-  }, []);
+
 
   // ── Profile (read/update) ──────────────────────────────────────────────────
   // ✅ /api/customers/me  (matches server.js: app.use('/api/customers', customerRoutes))

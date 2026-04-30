@@ -14,52 +14,38 @@ const CustomerLogin = () => {
     setError('');
   };
 
-  const onSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-    setLoading(true);
+const onSubmit = async (e) => {
+  e.preventDefault();
+  setError('');
+  setLoading(true);
 
-    const { email, password } = form;
+  const { email, password } = form;
 
-    // ── Step 1: Try customer login first ──────────────────────────────────
+  try {
+    const res = await customerLogin({ email, password });
+    const { token, customer } = res.data;
+
+    // ✅ Must match what CustomerContext reads
+    localStorage.setItem('shree_customer_token', token);
+    localStorage.setItem('shree_customer_data',  JSON.stringify(customer));
+
+    // Force a page reload so CustomerContext picks up the new token
+    window.location.href = '/account';   // ← use this instead of navigate()
+  } catch (err) {
+    // Try admin login as fallback
     try {
-      const res = await customerLogin({ email, password }); // ✅ object, not two args
-
-      const { token, customer } = res.data;
-      localStorage.setItem('shree_customer_token', token);
-      localStorage.setItem('shree_customer_data',  JSON.stringify(customer));
-
-      navigate('/account');
-      return; // ✅ stop here — don't try admin
-    } catch (customerErr) {
-      // 400 = bad request (shouldn't happen now), 401 = wrong password
-      // Only try admin if customer account genuinely doesn't exist (404)
-      // For any other error just show the message
-      const status = customerErr?.response?.status;
-
-      if (status !== 404) {
-        // Customer account exists but password wrong, OR other error
-        setError('Invalid email or password');
-        setLoading(false);
-        return;
-      }
-    }
-
-    // ── Step 2: Only if customer not found (404), try admin login ─────────
-    try {
-      const res = await adminLogin({ email, password }); // ✅ object
-
-      const { token, admin } = res.data;
+      const adminRes = await adminLogin({ email, password });
+      const { token, admin } = adminRes.data;
       localStorage.setItem('shree_admin_token', token);
       localStorage.setItem('shree_admin_data',  JSON.stringify(admin));
-
-      navigate('/admin');
+      window.location.href = '/admin';
     } catch {
       setError('Invalid email or password');
-    } finally {
-      setLoading(false);
     }
-  };
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="auth-page">
