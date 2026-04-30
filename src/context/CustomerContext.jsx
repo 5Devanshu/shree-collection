@@ -5,24 +5,21 @@ const CustomerContext = createContext(null);
 
 const API = import.meta.env.VITE_API_URL || '/api';
 
-// Axios instance for all customer API calls
 const client = axios.create({ baseURL: API });
 
-// Attach token to every request automatically
 client.interceptors.request.use((config) => {
   const token = localStorage.getItem('customerToken');
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Log API errors clearly in dev
 client.interceptors.response.use(
   (res) => res,
   (err) => {
     if (import.meta.env.DEV) {
       console.error('❌ API Error:', {
-        url:     err.config?.url,
         status:  err.response?.status,
+        url:     err.config?.url,
         message: err.response?.data?.message,
         data:    err.response?.data,
       });
@@ -33,86 +30,73 @@ client.interceptors.response.use(
 
 export const CustomerProvider = ({ children }) => {
   const [customer, setCustomer] = useState(null);
-  const [loading,  setLoading]  = useState(true);  // true until we check localStorage
+  const [loading,  setLoading]  = useState(true);
 
-  // ── Restore session on mount ─────────────────────────────────────────────
+  // Restore session from localStorage on mount
   useEffect(() => {
-    const token        = localStorage.getItem('customerToken');
+    const token          = localStorage.getItem('customerToken');
     const storedCustomer = localStorage.getItem('customerData');
-
     if (token && storedCustomer) {
-      try {
-        setCustomer(JSON.parse(storedCustomer));
-      } catch {
-        localStorage.removeItem('customerToken');
-        localStorage.removeItem('customerData');
-      }
+      try { setCustomer(JSON.parse(storedCustomer)); }
+      catch { localStorage.removeItem('customerToken'); localStorage.removeItem('customerData'); }
     }
     setLoading(false);
   }, []);
 
-  // ── Login ────────────────────────────────────────────────────────────────
-  // ✅ Calls /customers/login (NOT /auth/login which is admin-only)
+  // ── Login ──────────────────────────────────────────────────────────────────
+  // ✅ /api/customer-auth/login  (matches server.js: app.use('/api/customer-auth', customerAuthRoutes))
   const login = useCallback(async (email, password) => {
-    const res = await client.post('/customers/login', { email, password });
-
+    const res = await client.post('/customer-auth/login', { email, password });
     const { token, customer: userData } = res.data;
-
     localStorage.setItem('customerToken', token);
     localStorage.setItem('customerData',  JSON.stringify(userData));
     setCustomer(userData);
-
     return res.data;
   }, []);
 
-  // ── Register ─────────────────────────────────────────────────────────────
+  // ── Register ───────────────────────────────────────────────────────────────
+  // ✅ /api/customer-auth/register
   const register = useCallback(async (name, email, password, phone) => {
-    const res = await client.post('/customers/register', { name, email, password, phone });
-
+    const res = await client.post('/customer-auth/register', { name, email, password, phone });
     const { token, customer: userData } = res.data;
-
     localStorage.setItem('customerToken', token);
     localStorage.setItem('customerData',  JSON.stringify(userData));
     setCustomer(userData);
-
     return res.data;
   }, []);
 
-  // ── Logout ───────────────────────────────────────────────────────────────
+  // ── Logout ─────────────────────────────────────────────────────────────────
   const logout = useCallback(() => {
     localStorage.removeItem('customerToken');
     localStorage.removeItem('customerData');
     setCustomer(null);
   }, []);
 
-  // ── Get full profile from server ─────────────────────────────────────────
+  // ── Profile (read/update) ──────────────────────────────────────────────────
+  // ✅ /api/customers/me  (matches server.js: app.use('/api/customers', customerRoutes))
   const fetchProfile = useCallback(async () => {
-    const res = await client.get('/customers/me');
+    const res      = await client.get('/customers/me');
     const userData = res.data.data || res.data.customer;
     setCustomer(userData);
     localStorage.setItem('customerData', JSON.stringify(userData));
     return userData;
   }, []);
 
-  // ── Update profile ───────────────────────────────────────────────────────
   const updateProfile = useCallback(async (data) => {
-    const res = await client.put('/customers/me', data);
+    const res     = await client.put('/customers/me', data);
     const updated = res.data.data || res.data.customer;
     setCustomer(updated);
     localStorage.setItem('customerData', JSON.stringify(updated));
     return updated;
   }, []);
 
-  // ── Change password ──────────────────────────────────────────────────────
+  // ── Password ───────────────────────────────────────────────────────────────
   const changePassword = useCallback(async (currentPassword, newPassword) => {
-    const res = await client.put('/customers/me/change-password', {
-      currentPassword,
-      newPassword,
-    });
+    const res = await client.put('/customers/me/change-password', { currentPassword, newPassword });
     return res.data;
   }, []);
 
-  // ── Addresses ────────────────────────────────────────────────────────────
+  // ── Addresses ─────────────────────────────────────────────────────────────
   const addAddress = useCallback(async (addressData) => {
     const res = await client.post('/customers/me/addresses', addressData);
     await fetchProfile();
@@ -125,7 +109,7 @@ export const CustomerProvider = ({ children }) => {
     return res.data;
   }, [fetchProfile]);
 
-  // ── Orders ───────────────────────────────────────────────────────────────
+  // ── Orders ─────────────────────────────────────────────────────────────────
   const fetchOrders = useCallback(async () => {
     const res = await client.get('/customers/orders');
     return res.data?.data || res.data || [];
