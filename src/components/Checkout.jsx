@@ -1,494 +1,476 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useStore }    from '../context/StoreContext';
-import { useCustomer } from '../context/CustomerContext';
-import { createDemoOrder } from '../api/client';
+import { useNavigate } from 'react-router-dom';
 import './Checkout.css';
 
-const Checkout = () => {
-  const navigate                            = useNavigate();
-  const { cart, cartTotal, cartCount, removeFromCart, updateCartQty, clearCart } = useStore();
-  const { customer, isLoggedIn, logout }    = useCustomer();
-  const [placing, setPlacing]               = useState(false);
-  const [error, setError]                   = useState('');
-  const [guestMode, setGuestMode]           = useState(!isLoggedIn);  // ✅ Explicit guest mode tracking
+const API = import.meta.env.VITE_API_URL;
 
-  // ── Pre-fill from customer profile if logged in (and not in guest mode) ────
+// ─── Helper: get or create a guest session ID ────────────────────────────────
+const getSessionId = () => {
+  let id = localStorage.getItem('cartSessionId');
+  if (!id) {
+    id = `session_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    localStorage.setItem('cartSessionId', id);
+  }
+  return id;
+};
+
+const Checkout = () => {
+  const navigate = useNavigate();
+
+  // ── Cart state ──────────────────────────────────────────────────────────────
+  const [cart, setCart]         = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
+  const [cartLoading, setCartLoading] = useState(true);
+
+  // ── Form state ──────────────────────────────────────────────────────────────
   const [form, setForm] = useState({
-    email:    '',
-    name:     '',
-    phone:    '',
-    line1:    '',
-    line2:    '',
-    city:     '',
-    state:    '',
-    pincode:  '',
+    email:        '',
+    firstName:    '',
+    lastName:     '',
+    addressLine1: '',
+    addressLine2: '',
+    city:         '',
+    postalCode:   '',
   });
 
-  const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
+  // ── PhonePe iframe state ─────────────────────────────────────────────────────
+  const [checkoutUrl,     setCheckoutUrl]     = useState(null);   // iframe src
+  const [merchantOrderId, setMerchantOrderId] = useState(null);   // used in /confirm
+  const [validatedItems,  setValidatedItems]  = useState([]);
+  const [totals,          setTotals]          = useState({});
 
+  // ── UI state ─────────────────────────────────────────────────────────────────
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState('');
+
+  // ── Step tracker: 'form' | 'payment' | 'success' ────────────────────────────
+  const [step, setStep] = useState('form');
+
+  // ── Load cart on mount ───────────────────────────────────────────────────────
   useEffect(() => {
-    if (isLoggedIn && customer && !guestMode) {  // ✅ Pre-fill only if logged in AND not in guest mode
-      setForm(prev => ({
-        ...prev,
-        email: customer.email || '',
-        name:  customer.name  || '',
-        phone: customer.phone || '',
-      }));
+    const fetchCart = async () => {
+      try {
+        const res = await fetch(`${API}/cart`, {
+          headers: { 'x-session-id': getSessionId() },
+        });
+        const data = await res.json();
+        if (data.success && data.cart?.items?.length > 0) {
+          setCart(data.cart);
+        }
+      } catch {
+        setError('Could not load your cart. Please refresh.');
+      } finally {
+        setCartLoading(false);
+      }
+    };
+    fetchCart();
+  }, []);
+
+  // ── Listen for PhonePe iframe postMessage (payment done / user returns) ──────
+  useEffect(() => {
+    const handleMessage = (event) => {
+      // PhonePe may post a message on completion — use as a trigger to confirm
+      if (event.data?.status === 'SUCCESS' || event.data?.code === 'PAYMENT_SUCCESS') {
+        handleConfirm();
+      }
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [merchantOrderId, validatedItems, totals]); // eslint-disable-line
+
+  // ── Form field handler ───────────────────────────────────────────────────────
+  const handleChange = (e) => {
+    setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    setError('');
+  };
+
+  // ── Step 1: Submit form → call /initiate → show iframe ──────────────────────
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setError('');
+
+    if (cart.items.length === 0) {
+      setError('Your cart is empty. Add items before checking out.');
+      return;
     }
-  }, [isLoggedIn, customer, guestMode]);
 
-  // ── Calculate shipping charges ────────────────────────────────────────────
-  const SHIPPING_THRESHOLD = 500;
-  const SHIPPING_CHARGE = 70;
-  const shippingCost = cartTotal >= SHIPPING_THRESHOLD ? 0 : SHIPPING_CHARGE;
-  const finalTotal = cartTotal + shippingCost;
+    setLoading(true);
+    try {
+      // Map cart items to the shape the backend validateCartService expects
+      const items = cart.items.map((i) => ({
+        productId: i.product,
+        price:     i.price,
+        quantity:  i.quantity,
+      }));
 
-  // ── Empty cart state ──────────────────────────────────────────────────────
-  if (cartCount === 0) {
+      const res = await fetch(`${API}/checkout/initiate`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items, email: form.email }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        setError(data.message || 'Could not initiate payment. Please try again.');
+        return;
+      }
+
+      // Store everything needed for the /confirm step
+      setCheckoutUrl(data.checkoutUrl);
+      setMerchantOrderId(data.merchantOrderId);
+      setValidatedItems(data.validatedItems);
+      setTotals({
+        subtotal:     data.subtotal,
+        shippingCost: data.shippingCost,
+        total:        data.total,
+      });
+
+      // Move to payment step — iframe replaces the form
+      setStep('payment');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      setError('Network error. Please check your connection and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Step 2: Confirm payment → call /confirm → place order ───────────────────
+  // Called after PhonePe redirects back OR user clicks "I've completed payment"
+  const handleConfirm = async () => {
+    if (!merchantOrderId) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch(`${API}/checkout/confirm`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          merchantOrderId,
+          email:          form.email,
+          shippingAddress: {
+            firstName:    form.firstName,
+            lastName:     form.lastName,
+            addressLine1: form.addressLine1,
+            addressLine2: form.addressLine2,
+            city:         form.city,
+            postalCode:   form.postalCode,
+          },
+          validatedItems,
+          ...totals,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!data.success) {
+        // Payment not yet completed — give user a clear message
+        setError(
+          data.state === 'PENDING'
+            ? 'Payment is still being processed. Please wait a moment and try again.'
+            : data.message || 'Payment could not be confirmed. Please contact support.'
+        );
+        return;
+      }
+
+      // Clear cart and redirect to success
+      await fetch(`${API}/cart/clear`, {
+        method: 'DELETE',
+        headers: { 'x-session-id': getSessionId() },
+      });
+
+      setStep('success');
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch {
+      setError('Could not confirm your order. Please contact support with your Order ID.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ── Poll status manually (fallback if iframe postMessage doesn't fire) ───────
+  const handleCheckStatus = async () => {
+    if (!merchantOrderId) return;
+    setLoading(true);
+    setError('');
+
+    try {
+      const res  = await fetch(`${API}/checkout/status/${merchantOrderId}`);
+      const data = await res.json();
+
+      if (data.success && data.state === 'COMPLETED') {
+        await handleConfirm();
+      } else if (data.state === 'FAILED') {
+        setError('Your payment failed. Please go back and try again.');
+      } else {
+        setError('Payment is still pending. Please wait a moment, then click "Check Payment Status" again.');
+      }
+    } catch {
+      setError('Could not check payment status. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // RENDER: SUCCESS
+  // ────────────────────────────────────────────────────────────────────────────
+  if (step === 'success') {
     return (
-      <div className="checkout-empty">
-        <div className="checkout-empty-inner">
-          <p className="display-lg" style={{ fontSize: '3rem', marginBottom: '1rem' }}>Your bag is empty</p>
-          <p className="body-lg" style={{ color: 'var(--on-surface-variant)', marginBottom: '2rem' }}>
-            Add pieces to your bag before checking out.
+      <div className="checkout-page">
+        <div className="checkout-success">
+          <div className="success-icon">✓</div>
+          <h1 className="display-sm">Order Confirmed!</h1>
+          <p className="body-md">
+            Thank you, {form.firstName}! A confirmation email has been sent to{' '}
+            <strong>{form.email}</strong>.
           </p>
-          <Link to="/collections/all" className="btn btn-primary" style={{ padding: '1rem 2rem' }}>
-            Explore Collection
-          </Link>
+          <p className="body-md success-amount">
+            Total charged: ₹{(totals.total || 0).toLocaleString('en-IN')}
+          </p>
+          <button className="btn-primary" onClick={() => navigate('/')}>
+            Continue Shopping
+          </button>
         </div>
       </div>
     );
   }
 
-  // ── Place order handler + Payment Gateway redirect ────────────────────────
-  const handlePlaceOrder = async (e) => {
-    e.preventDefault();
-    setError('');
-    setPlacing(true);
+  // ────────────────────────────────────────────────────────────────────────────
+  // RENDER: PAYMENT STEP (PhonePe iframe)
+  // ────────────────────────────────────────────────────────────────────────────
+  if (step === 'payment') {
+    return (
+      <div className="checkout-page">
+        <div className="checkout-container checkout-payment-step">
+          <div className="payment-header">
+            <button
+              className="btn-back"
+              onClick={() => { setStep('form'); setCheckoutUrl(null); setError(''); }}
+            >
+              ← Back
+            </button>
+            <h1 className="display-sm">Complete Payment</h1>
+            <p className="body-md disclaimer">
+              Secure payment powered by PhonePe. Pay via UPI, Card, or Net Banking.
+            </p>
+          </div>
 
-    try {
-      // Validate form
-      if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
-        setError('Please fill in all contact information');
-        setPlacing(false);
-        return;
-      }
+          {/* PhonePe Checkout iframe */}
+          <div className="phonepe-iframe-wrapper">
+            <iframe
+              src={checkoutUrl}
+              title="PhonePe Checkout"
+              className="phonepe-iframe"
+              allow="payment"
+            />
+          </div>
 
-      if (!form.line1.trim() || !form.city.trim() || !form.state.trim() || !form.pincode.trim()) {
-        setError('Please fill in complete delivery address');
-        setPlacing(false);
-        return;
-      }
+          {/* Fallback for when PhonePe redirect brings user back */}
+          <div className="payment-fallback">
+            <p className="body-md">
+              Already completed payment on PhonePe?
+            </p>
+            {error && <p className="checkout-error">{error}</p>}
+            <div className="payment-fallback-actions">
+              <button
+                className="btn-primary"
+                onClick={handleCheckStatus}
+                disabled={loading}
+              >
+                {loading ? 'Checking…' : 'Check Payment Status'}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => { setStep('form'); setCheckoutUrl(null); setError(''); }}
+              >
+                Go Back & Retry
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
-      // Prepare order data in correct format for Order model
-      const nameParts = form.name.trim().split(' ');
-      const orderData = {
-        email: form.email,
-        phone: form.phone,
-        shippingAddress: {
-          firstName: nameParts[0],
-          lastName: nameParts.slice(1).join(' ') || nameParts[0],
-          addressLine1: form.line1,
-          addressLine2: form.line2,
-          city: form.city,
-          postalCode: form.pincode,
-          country: 'India',
-        },
-        items: (Array.isArray(cart) ? cart : []).map(item => ({
-          product: item._id,
-          title: item.title,
-          material: item.material || '',
-          price: item.price || 0,
-          quantity: item.qty || 1,
-          image: item.image || '',
-        })),
-        shippingCost: shippingCost,
-        isGuestOrder: guestMode,  // ✅ Use explicit guestMode flag
-      };
-
-      // ✅ Step 1: Create order in database
-      const orderResponse = await createDemoOrder(orderData);
-
-      if (orderResponse.data.success) {
-        const orderId = orderResponse.data.data?.orderId || orderResponse.data.data?.orderNumber || 'N/A';
-        
-        // ✅ Step 2: Initiate PhonePe payment gateway
-        // Build payment URL - handle /api/ deduplication
-        let baseUrl = import.meta.env.VITE_API_URL || '';
-        
-        // Remove trailing slash if present
-        if (baseUrl.endsWith('/')) {
-          baseUrl = baseUrl.slice(0, -1);
-        }
-        
-        // Remove duplicate /api if VITE_API_URL contains it twice (defensive programming)
-        baseUrl = baseUrl.replace('/api/api', '/api');
-        
-        // Ensure /api prefix
-        if (!baseUrl.includes('/api')) {
-          baseUrl += '/api';
-        }
-        
-        const paymentInitUrl = `${baseUrl}/orders/${orderId}/payment/initiate`;
-        
-        console.log('[Payment] Order ID:', orderId);
-        console.log('[Payment] Base URL:', baseUrl);
-        console.log('[Payment] Full URL:', paymentInitUrl);
-        
-        try {
-          const paymentResponse = await fetch(paymentInitUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-          });
-
-          const paymentData = await paymentResponse.json();
-          console.log('[Payment] Response:', paymentData);
-
-          if (paymentData.success && paymentData.data?.paymentUrl) {
-            // ✅ Step 3: Redirect to PhonePe payment page
-            console.log('[Payment] Redirecting to:', paymentData.data.paymentUrl);
-            window.location.href = paymentData.data.paymentUrl;
-          } else {
-            // Fallback: Show order success if payment initiation fails
-            console.error('[Payment] Error:', paymentData.message);
-            alert(`✓ Order placed successfully!\n\nOrder ID: ${orderId}\n\nConfirmation email will be sent to ${form.email}\n\nNote: Payment gateway redirect failed. Please contact support.`);
-            clearCart();
-            navigate('/');
-          }
-        } catch (paymentErr) {
-          console.warn('[Payment] Initiation error:', paymentErr);
-          // Fallback: Show order success if payment initiation fails
-          alert(`✓ Order placed successfully!\n\nOrder ID: ${orderId}\n\nConfirmation email will be sent to ${form.email}\n\nNote: Payment gateway temporarily unavailable. Please try again.`);
-          clearCart();
-          navigate('/');
-        }
-      }
-    } catch (err) {
-      console.error('Order error:', err);
-      setError(err.message || 'Failed to place order. Please try again.');
-    } finally {
-      setPlacing(false);
-    }
-  };
-
+  // ────────────────────────────────────────────────────────────────────────────
+  // RENDER: FORM STEP
+  // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="checkout-page">
       <div className="checkout-container">
 
-        {/* ── Left — Form ────────────────────────────────────────────────── */}
+        {/* ── Left: Form ─────────────────────────────────────────────────── */}
         <div className="checkout-form-section">
-          <h1 className="headline-md" style={{ marginBottom: '0.5rem' }}>Checkout</h1>
-          <p className="body-lg" style={{ color: 'var(--on-surface-variant)', marginBottom: '2.5rem' }}>
-            Complete your order securely.
-          </p>
+          <h1 className="display-sm">Checkout</h1>
+          <p className="body-md disclaimer">Complete your order securely.</p>
 
-          <form onSubmit={handlePlaceOrder}>
+          {error && <div className="checkout-error">{error}</div>}
 
-            {/* Checkout Mode Toggle - if logged in */}
-            {isLoggedIn && (
-              <div className="checkout-section" style={{ marginBottom: '1.5rem' }}>
-                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <button
-                    type="button"
-                    onClick={() => setGuestMode(false)}
-                    style={{
-                      flex: 1,
-                      padding: '12px 16px',
-                      border: guestMode ? '1px solid #d0c5af' : '2px solid #735c00',
-                      background: guestMode ? 'transparent' : 'rgba(115, 92, 0, 0.05)',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      fontWeight: guestMode ? 400 : 600,
-                      color: guestMode ? '#7f7663' : '#735c00',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    Account Checkout
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setGuestMode(true)}
-                    style={{
-                      flex: 1,
-                      padding: '12px 16px',
-                      border: guestMode ? '2px solid #735c00' : '1px solid #d0c5af',
-                      background: guestMode ? 'rgba(115, 92, 0, 0.05)' : 'transparent',
-                      borderRadius: '4px',
-                      cursor: 'pointer',
-                      fontSize: '0.875rem',
-                      fontWeight: guestMode ? 600 : 400,
-                      color: guestMode ? '#735c00' : '#7f7663',
-                      transition: 'all 0.2s',
-                    }}
-                  >
-                    Guest Checkout
-                  </button>
-                </div>
-              </div>
-            )}
+          <form className="checkout-form" onSubmit={handleSubmit}>
 
-            {/* Contact */}
-            <div className="checkout-section">
-              <h2 className="checkout-section-title">Contact Information</h2>
-
-              <div className="checkout-field">
+            {/* Contact Information */}
+            <div className="form-section">
+              <h2 className="label-lg section-title">Contact Information</h2>
+              <div className="form-group">
                 <input
                   type="email"
-                  placeholder="Email Address"
+                  name="email"
                   value={form.email}
-                  onChange={e => set('email', e.target.value)}
+                  onChange={handleChange}
+                  placeholder="Email Address"
                   className="checkout-input"
                   required
                 />
               </div>
-
-              <div className="checkout-row">
-                <div className="checkout-field">
-                  <input
-                    type="text"
-                    placeholder="Full Name"
-                    value={form.name}
-                    onChange={e => set('name', e.target.value)}
-                    className="checkout-input"
-                    required
-                  />
-                </div>
-                <div className="checkout-field">
-                  <input
-                    type="tel"
-                    placeholder="Phone Number"
-                    value={form.phone}
-                    onChange={e => set('phone', e.target.value)}
-                    className="checkout-input"
-                    required
-                  />
-                </div>
-              </div>
             </div>
 
-            {/* Address */}
-            <div className="checkout-section">
-              <h2 className="checkout-section-title">Shipping Address</h2>
-
-              <div className="checkout-field">
+            {/* Shipping Address */}
+            <div className="form-section">
+              <h2 className="label-lg section-title">Shipping Address</h2>
+              <div className="form-row">
                 <input
                   type="text"
+                  name="firstName"
+                  value={form.firstName}
+                  onChange={handleChange}
+                  placeholder="First Name"
+                  className="checkout-input half"
+                  required
+                />
+                <input
+                  type="text"
+                  name="lastName"
+                  value={form.lastName}
+                  onChange={handleChange}
+                  placeholder="Last Name"
+                  className="checkout-input half"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <input
+                  type="text"
+                  name="addressLine1"
+                  value={form.addressLine1}
+                  onChange={handleChange}
                   placeholder="Address Line 1"
-                  value={form.line1}
-                  onChange={e => set('line1', e.target.value)}
                   className="checkout-input"
                   required
                 />
               </div>
-
-              <div className="checkout-field">
+              <div className="form-group">
                 <input
                   type="text"
+                  name="addressLine2"
+                  value={form.addressLine2}
+                  onChange={handleChange}
                   placeholder="Apartment, suite, etc. (optional)"
-                  value={form.line2}
-                  onChange={e => set('line2', e.target.value)}
                   className="checkout-input"
                 />
               </div>
-
-              <div className="checkout-row">
-                <div className="checkout-field">
-                  <input
-                    type="text"
-                    placeholder="City"
-                    value={form.city}
-                    onChange={e => set('city', e.target.value)}
-                    className="checkout-input"
-                    required
-                  />
-                </div>
-                <div className="checkout-field">
-                  <input
-                    type="text"
-                    placeholder="State"
-                    value={form.state}
-                    onChange={e => set('state', e.target.value)}
-                    className="checkout-input"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="checkout-field" style={{ maxWidth: 200 }}>
+              <div className="form-row">
                 <input
                   type="text"
-                  placeholder="Pincode"
-                  value={form.pincode}
-                  onChange={e => set('pincode', e.target.value)}
-                  className="checkout-input"
-                  maxLength={6}
+                  name="city"
+                  value={form.city}
+                  onChange={handleChange}
+                  placeholder="City"
+                  className="checkout-input half"
+                  required
+                />
+                <input
+                  type="text"
+                  name="postalCode"
+                  value={form.postalCode}
+                  onChange={handleChange}
+                  placeholder="Postal Code"
+                  className="checkout-input half"
                   required
                 />
               </div>
             </div>
 
-            {/* Saved address quick-fill if logged in */}
-            {isLoggedIn && customer?.savedAddresses?.length > 0 && (
-              <div className="checkout-section">
-                <h2 className="checkout-section-title">Saved Addresses</h2>
-                <div className="saved-address-list">
-                  {(Array.isArray(customer?.savedAddresses) ? customer.savedAddresses : []).map(addr => (
-                    <button
-                      key={addr._id}
-                      type="button"
-                      className="saved-address-btn"
-                      onClick={() => setForm(prev => ({
-                        ...prev,
-                        line1:   addr.line1,
-                        line2:   addr.line2 || '',
-                        city:    addr.city,
-                        state:   addr.state,
-                        pincode: addr.pincode,
-                      }))}
-                    >
-                      <span className="saved-address-label">{addr.label}</span>
-                      <span className="saved-address-text">
-                        {addr.line1}, {addr.city}, {addr.state} — {addr.pincode}
-                      </span>
-                    </button>
-                  ))}
-                </div>
+            {/* Payment — replaced by PhonePe iframe after submit */}
+            <div className="form-section">
+              <h2 className="label-lg section-title">Payment</h2>
+              <div className="phonepe-payment-note">
+                <span className="phonepe-badge">PhonePe</span>
+                <p className="body-md">
+                  You'll be redirected to PhonePe's secure checkout to pay via
+                  UPI, Debit/Credit Card, or Net Banking.
+                </p>
               </div>
-            )}
-
-            {error && (
-              <div style={{
-                background: 'rgba(186, 26, 26, 0.06)',
-                border: '1px solid rgba(186, 26, 26, 0.2)',
-                color: 'var(--on-error)',
-                padding: '12px 16px',
-                borderRadius: '4px',
-                marginBottom: '16px',
-                fontSize: '0.875rem',
-              }}>
-                {error}
-              </div>
-            )}
+            </div>
 
             <button
               type="submit"
-              className="btn btn-primary checkout-submit"
-              disabled={placing}
-              style={{ opacity: placing ? 0.7 : 1, cursor: placing ? 'not-allowed' : 'pointer' }}
+              className="btn-primary complete-order-btn"
+              disabled={loading || cartLoading || cart.items.length === 0}
             >
-              {placing ? 'Processing...' : `Place Order — ₹${finalTotal.toLocaleString('en-IN')}`}
+              {loading
+                ? 'Processing…'
+                : cartLoading
+                ? 'Loading cart…'
+                : 'Proceed to Payment'}
             </button>
-
-            {!isLoggedIn && (
-              <p className="body-lg" style={{ fontSize: '0.8rem', color: 'var(--on-surface-variant)', marginTop: '1rem', textAlign: 'center' }}>
-                <Link to="/login" style={{ color: 'var(--primary)' }}>Sign in</Link> to auto-fill your details and track this order.
-              </p>
-            )}
           </form>
         </div>
 
-        {/* ── Right — Order Summary ──────────────────────────────────────── */}
+        {/* ── Right: Order Summary ────────────────────────────────────────── */}
         <div className="checkout-summary-section">
-          <h2 className="headline-md" style={{ marginBottom: '2rem' }}>Order Summary</h2>
+          <h2 className="label-lg section-title">Order Summary</h2>
 
-          {/* Cart items */}
           <div className="summary-items">
-            {(Array.isArray(cart) ? cart : []).map(item => {
-              const hasDiscount   = item.discountEnabled && item.discountedPrice && item.discountedPrice < item.price;
-              const displayPrice  = hasDiscount ? item.discountedPrice : item.price;
-              const numericPrice  = parseFloat(displayPrice) || 0;
-              const originalPrice = parseFloat(item.price) || 0;
-
-              return (
-                <div key={item._id} className="summary-item">
-                  {/* Image */}
-                  <div className="summary-item-image-wrap">
-                    {item.image
-                      ? <img src={item.image} alt={item.title} className="summary-item-image" />
-                      : <div className="summary-item-image summary-item-placeholder">💎</div>
-                    }
-                    {/* Qty badge */}
-                    <span className="summary-item-qty-badge">{item.qty}</span>
-                  </div>
-
-                  {/* Details */}
+            {cartLoading ? (
+              <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
+                Loading your cart…
+              </p>
+            ) : cart.items.length === 0 ? (
+              <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>
+                Your cart is empty.
+              </p>
+            ) : (
+              cart.items.map((item, idx) => (
+                <div className="summary-item" key={idx}>
+                  {item.image && (
+                    <img
+                      src={item.image}
+                      alt={item.title}
+                      className="summary-item-image"
+                    />
+                  )}
                   <div className="summary-item-details">
-                    <p className="summary-item-title">{item.title}</p>
+                    <h4 className="label-md">{item.title}</h4>
                     {item.material && (
-                      <p className="summary-item-material">{item.material}</p>
+                      <p className="label-sm">{item.material.toUpperCase()}</p>
                     )}
-                    {hasDiscount && (
-                      <p style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600 }}>
-                        {item.discountPercent}% OFF
-                      </p>
-                    )}
-
-                    {/* Qty controls */}
-                    <div className="summary-item-qty-controls">
-                      <button
-                        onClick={() => updateCartQty(item._id, item.qty - 1)}
-                        className="qty-btn"
-                        aria-label="Decrease quantity"
-                      >
-                        −
-                      </button>
-                      <span className="qty-value">{item.qty}</span>
-                      <button
-                        onClick={() => updateCartQty(item._id, item.qty + 1)}
-                        className="qty-btn"
-                        aria-label="Increase quantity"
-                      >
-                        +
-                      </button>
-                      <button
-                        onClick={() => removeFromCart(item._id)}
-                        className="qty-remove"
-                        aria-label="Remove item"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Price */}
-                  <div className="summary-item-price">
-                    <p style={{ fontWeight: 500 }}>
-                      ₹{(numericPrice * item.qty).toLocaleString('en-IN')}
+                    <p className="label-md">
+                      ₹{item.price.toLocaleString('en-IN')}
+                      {item.quantity > 1 && ` × ${item.quantity}`}
                     </p>
-                    {hasDiscount && (
-                      <p style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)', textDecoration: 'line-through' }}>
-                        ₹{(originalPrice * item.qty).toLocaleString('en-IN')}
-                      </p>
-                    )}
                   </div>
                 </div>
-              );
-            })}
+              ))
+            )}
           </div>
 
-          {/* Totals */}
           <div className="summary-totals">
             <div className="summary-row">
-              <span className="body-lg">Subtotal</span>
-              <span className="body-lg">₹{cartTotal.toLocaleString('en-IN')}</span>
-            </div>
-            <div className="summary-row">
-              <span className="body-lg">Shipping</span>
-              <span className="body-lg" style={{ color: shippingCost > 0 ? 'var(--on-surface)' : 'var(--primary)', fontWeight: 500 }}>
-                {shippingCost > 0 ? `₹${shippingCost}` : 'Complimentary'}
+              <span className="body-md">Subtotal</span>
+              <span className="body-md">
+                ₹{cart.subtotal.toLocaleString('en-IN')}
               </span>
             </div>
-            {shippingCost === 0 && cartTotal > 0 && (
-              <p style={{ fontSize: '0.75rem', color: 'var(--primary)', marginTop: '0.5rem', fontStyle: 'italic' }}>
-                ✓ Free shipping on orders above ₹{SHIPPING_THRESHOLD}
-              </p>
-            )}
-            <div className="summary-row summary-row--total">
-              <span className="headline-md" style={{ fontSize: '1.2rem' }}>Total</span>
-              <span className="headline-md" style={{ fontSize: '1.2rem' }}>
-                ₹{finalTotal.toLocaleString('en-IN')}
+            <div className="summary-row">
+              <span className="body-md">Shipping</span>
+              <span className="body-md">Complimentary</span>
+            </div>
+            <div className="summary-row total">
+              <span className="label-lg">Total</span>
+              <span className="label-lg">
+                ₹{cart.total.toLocaleString('en-IN')}
               </span>
             </div>
           </div>

@@ -10,6 +10,7 @@ import AdminPanel           from './components/AdminPanel';
 import CategoryPage         from './components/CategoryPage';
 import ProductDescription   from './components/ProductDescription';
 import Checkout             from './components/Checkout';
+import CheckoutCallback     from './components/CheckoutCallback';  // ← ADD
 import PaymentSuccess       from './components/PaymentSuccess';
 import CustomerLogin        from './components/CustomerLogin';
 import CustomerRegister     from './components/CustomerRegister';
@@ -35,6 +36,7 @@ function App() {
               <Route path="/collections/:category" element={<CategoryPage />} />
               <Route path="/product/:id"           element={<ProductDescription />} />
               <Route path="/checkout"              element={<Checkout />} />
+              <Route path="/checkout/callback"     element={<CheckoutCallback />} />  {/* ← ADD */}
               <Route path="/payment/success"       element={<PaymentSuccess />} />
 
               {/* Single login page — routes to admin or customer automatically */}

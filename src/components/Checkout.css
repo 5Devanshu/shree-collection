@@ -327,3 +327,158 @@
     white-space: normal;
   }
 }
+/* ── PhonePe payment step ─────────────────────────────────────────────────── */
+.checkout-payment-step {
+  flex-direction: column;
+  align-items: center;
+  padding: var(--spacing-8) 5%;
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.payment-header {
+  width: 100%;
+  margin-bottom: var(--spacing-6);
+}
+
+.payment-header h1 {
+  margin: var(--spacing-4) 0 var(--spacing-2);
+}
+
+.btn-back {
+  background: none;
+  border: none;
+  color: var(--on-surface-variant);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.95rem;
+  cursor: pointer;
+  padding: 0;
+  letter-spacing: 0.02em;
+  transition: color 0.2s ease;
+}
+
+.btn-back:hover {
+  color: var(--on-surface);
+}
+
+/* PhonePe iframe */
+.phonepe-iframe-wrapper {
+  width: 100%;
+  border: 1px solid var(--surface-container-highest);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.phonepe-iframe {
+  width: 100%;
+  height: 600px;
+  border: none;
+  display: block;
+}
+
+/* Fallback section below iframe */
+.payment-fallback {
+  width: 100%;
+  margin-top: var(--spacing-8);
+  padding-top: var(--spacing-8);
+  border-top: 1px solid var(--surface-container-highest);
+  text-align: center;
+}
+
+.payment-fallback .body-md {
+  color: var(--on-surface-variant);
+  margin-bottom: var(--spacing-4);
+}
+
+.payment-fallback-actions {
+  display: flex;
+  gap: var(--spacing-4);
+  justify-content: center;
+  margin-top: var(--spacing-4);
+  flex-wrap: wrap;
+}
+
+/* PhonePe badge in form payment section */
+.phonepe-payment-note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-4);
+  padding: var(--spacing-5);
+  background: var(--surface);
+  border: 1px solid var(--surface-container-highest);
+  border-radius: 4px;
+}
+
+.phonepe-badge {
+  display: inline-block;
+  background: #5b2d8e;
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  padding: 4px 10px;
+  border-radius: 3px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.phonepe-payment-note .body-md {
+  color: var(--on-surface-variant);
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Error message */
+.checkout-error {
+  background: #fff0f0;
+  border: 1px solid #ffcccc;
+  color: #c0392b;
+  padding: var(--spacing-4) var(--spacing-5);
+  border-radius: 4px;
+  font-size: 0.9rem;
+  margin-bottom: var(--spacing-6);
+}
+
+/* Success page */
+.checkout-success {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: var(--spacing-16) var(--spacing-8);
+  min-height: 60vh;
+  max-width: 540px;
+  margin: 0 auto;
+  gap: var(--spacing-6);
+}
+
+.success-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: #e8f5e9;
+  color: #2e7d32;
+  font-size: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.success-amount {
+  color: var(--on-surface-variant);
+  margin-top: calc(-1 * var(--spacing-2));
+}
+
+@media (max-width: 600px) {
+  .phonepe-iframe {
+    height: 500px;
+  }
+
+  .payment-fallback-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
