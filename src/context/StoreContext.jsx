@@ -5,8 +5,6 @@ const StoreContext = createContext(null);
 
 const API = import.meta.env.VITE_API_URL || '/api';
 
-// ── One session ID for the entire app lifetime ───────────────────────────────
-// Created once, stored in localStorage, sent as header on every cart request
 const getOrCreateSessionId = () => {
   let id = localStorage.getItem('cartSessionId');
   if (!id) {
@@ -16,19 +14,59 @@ const getOrCreateSessionId = () => {
   return id;
 };
 
-// Axios instance that always sends the session header
 const cartClient = axios.create({ baseURL: API });
 cartClient.interceptors.request.use((config) => {
   config.headers['x-session-id'] = getOrCreateSessionId();
   return config;
 });
 
+// Separate client for public data (no session header needed)
+const publicClient = axios.create({ baseURL: API });
+
 export const StoreProvider = ({ children }) => {
-  const [cart,      setCart]      = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
-  const [cartCount, setCartCount] = useState(0);
+
+  // ── Cart ─────────────────────────────────────────────────────────────────
+  const [cart,        setCart]        = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
+  const [cartCount,   setCartCount]   = useState(0);
   const [cartLoading, setCartLoading] = useState(false);
 
-  // ── Fetch full cart (used by Checkout) ───────────────────────────────────
+  // ── Products & Categories ─────────────────────────────────────────────────
+  const [products,     setProducts]     = useState([]);   // ← [] not undefined
+  const [categories,   setCategories]   = useState([]);   // ← [] not undefined
+  const [loadingProds, setLoadingProds] = useState(true);
+  const [loadingCats,  setLoadingCats]  = useState(true);
+
+  // ── Fetch categories on mount ─────────────────────────────────────────────
+  useEffect(() => {
+    publicClient.get('/categories')
+      .then(res => {
+        const data = res.data?.data || res.data?.categories || res.data || [];
+        setCategories(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setCategories([]))
+      .finally(() => setLoadingCats(false));
+  }, []);
+
+  // ── Fetch all products on mount ───────────────────────────────────────────
+  useEffect(() => {
+    publicClient.get('/products')
+      .then(res => {
+        const data = res.data?.products || res.data?.data || res.data || [];
+        setProducts(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setProducts([]))
+      .finally(() => setLoadingProds(false));
+  }, []);
+
+  // ── Cart: fetch count ─────────────────────────────────────────────────────
+  const fetchCartCount = useCallback(async () => {
+    try {
+      const res = await cartClient.get('/cart/count');
+      if (res.data.success) setCartCount(res.data.count || 0);
+    } catch { /* silent */ }
+  }, []);
+
+  // ── Cart: fetch full cart ─────────────────────────────────────────────────
   const fetchCart = useCallback(async () => {
     setCartLoading(true);
     try {
@@ -45,15 +83,7 @@ export const StoreProvider = ({ children }) => {
     }
   }, []);
 
-  // ── Fetch count only (used by Navbar) ────────────────────────────────────
-  const fetchCartCount = useCallback(async () => {
-    try {
-      const res = await cartClient.get('/cart/count');
-      if (res.data.success) setCartCount(res.data.count || 0);
-    } catch { /* silent */ }
-  }, []);
-
-  // ── Add to cart ──────────────────────────────────────────────────────────
+  // ── Cart: add ─────────────────────────────────────────────────────────────
   const addToCart = useCallback(async (productId, quantity = 1) => {
     try {
       const res = await cartClient.post('/cart/add', { productId, quantity });
@@ -67,7 +97,7 @@ export const StoreProvider = ({ children }) => {
     }
   }, []);
 
-  // ── Update quantity ──────────────────────────────────────────────────────
+  // ── Cart: update quantity ─────────────────────────────────────────────────
   const updateCartItem = useCallback(async (productId, quantity) => {
     try {
       const res = await cartClient.patch(`/cart/item/${productId}`, { quantity });
@@ -81,7 +111,7 @@ export const StoreProvider = ({ children }) => {
     }
   }, []);
 
-  // ── Remove item ──────────────────────────────────────────────────────────
+  // ── Cart: remove item ─────────────────────────────────────────────────────
   const removeFromCart = useCallback(async (productId) => {
     try {
       const res = await cartClient.delete(`/cart/item/${productId}`);
@@ -95,7 +125,7 @@ export const StoreProvider = ({ children }) => {
     }
   }, []);
 
-  // ── Clear cart (call after successful order) ─────────────────────────────
+  // ── Cart: clear ───────────────────────────────────────────────────────────
   const clearCart = useCallback(async () => {
     try {
       await cartClient.delete('/cart/clear');
@@ -104,15 +134,22 @@ export const StoreProvider = ({ children }) => {
     } catch { /* silent */ }
   }, []);
 
-  // Load count on mount
+  // Load cart count on mount
   useEffect(() => { fetchCartCount(); }, [fetchCartCount]);
 
   return (
     <StoreContext.Provider value={{
+      // Products & Categories — used by CategoryPage, FeaturedGrid, etc.
+      products,
+      categories,
+      loadingProds,
+      loadingCats,
+
+      // Cart — used by Checkout, Navbar, ProductCard
       cart,
       cartCount,
       cartLoading,
-      sessionId: getOrCreateSessionId(),  // expose for Checkout.jsx
+      sessionId: getOrCreateSessionId(),
       fetchCart,
       fetchCartCount,
       addToCart,
