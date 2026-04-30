@@ -108,7 +108,13 @@ export const getMyProfile     = ()     => client.get('/customer-auth/me');
 export const updateMyProfile  = (data) => client.put('/customer-auth/profile', data);
 export const changePassword   = (data) => client.patch('/customer-auth/change-password', data);
 export const verifyCustomerToken = (token) => client.post('/customer-auth/verify-token', { token });
+// ── Customer Orders ───────────────────────────────────────────────────────────
+export const getMyOrders    = ()        => client.get('/customers/orders');
+export const getMyOrderById = (orderId) => client.get(`/customers/orders/${orderId}`);
 
+// ── Customer Addresses ────────────────────────────────────────────────────────
+export const addAddress    = (data)      => client.post('/customers/me/addresses', data);
+export const deleteAddress = (addressId) => client.delete(`/customers/me/addresses/${addressId}`);
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
 export const createCategory   = (data)       => client.post('/categories', data);
