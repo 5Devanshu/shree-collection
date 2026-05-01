@@ -1,400 +1,338 @@
-import React, { useState } from 'react';
-import { useStore } from '../context/StoreContext';
-import { uploadCategoryImage } from '../api/client';
-import Modal from './Modal';
-import './Modal.css';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  fetchCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from '../api/client';
 
-// ── Category Form ─────────────────────────────────────────────────────────────
-const CategoryForm = ({ initial, onSave, onCancel }) => {
-  const [form, setForm] = useState(
-    initial || { name: '', slug: '', description: '', image: '', imagePublicId: '' }
-  );
-  const [imgError,   setImgError]   = useState(false);
-  const [uploading,  setUploading]  = useState(false);
-  const [uploadMsg,  setUploadMsg]  = useState('');
+const EMPTY_FORM = { name: '', description: '', isActive: true };
 
-  const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
-
-  // Auto-generate slug from name on create
-  const handleNameChange = (val) => {
-    set('name', val);
-    if (!initial) {
-      set('slug', val.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''));
-    }
-  };
-
-  // ── Image upload handler ────────────────────────────────────────────────────
-  const handleImageFile = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Show local preview immediately
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setImgError(false);
-      set('image', ev.target.result);
-    };
-    reader.readAsDataURL(file);
-
-    // Upload to Cloudinary
-    setUploading(true);
-    setUploadMsg('Uploading to Cloudinary…');
-    try {
-      const formData = new FormData();
-      formData.append('image', file);
-      const res = await uploadCategoryImage(formData);
-      // Replace local blob preview with permanent Cloudinary URL
-      set('image',         res.data.url);
-      set('imagePublicId', res.data.public_id);
-      setUploadMsg('✓ Image uploaded');
-      setTimeout(() => setUploadMsg(''), 2500);
-    } catch (err) {
-      setUploadMsg(`Upload failed: ${err.message}`);
-    } finally {
-      setUploading(false);
-    }
-  };
-
-  const handleSubmit = () => {
-    if (!form.name.trim() || !form.slug.trim()) {
-      alert('Category name and slug are required.');
-      return;
-    }
-    onSave(form);
-  };
-
-  const showPreview = form.image && !imgError;
-
-  return (
-    <div className="modal-form">
-
-      {/* ── Category Image ────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>Category Image</label>
-
-        {/* Preview box */}
-        <div className="form-image-preview">
-          {uploading ? (
-            <span className="placeholder-text">Uploading…</span>
-          ) : showPreview ? (
-            <img
-              src={form.image}
-              alt="Category preview"
-              onError={() => setImgError(true)}
-            />
-          ) : (
-            <span className="placeholder-text">
-              No image — paste a URL or choose a file below
-            </span>
-          )}
-        </div>
-
-        {/* Upload status message */}
-        {uploadMsg && (
-          <span style={{
-            fontSize: '0.78rem',
-            color: uploadMsg.startsWith('✓') ? 'var(--primary)' : 'var(--on-error)',
-            marginTop: 4,
-          }}>
-            {uploadMsg}
-          </span>
-        )}
-
-        {/* Paste URL */}
-        <input
-          type="text"
-          placeholder="Paste Cloudinary or image URL…"
-          value={!form.image?.startsWith('data:') ? (form.image || '') : ''}
-          onChange={e => {
-            setImgError(false);
-            set('image', e.target.value);
-            set('imagePublicId', ''); // URL-pasted images have no public_id
-          }}
-        />
-
-        {/* File upload — goes to Cloudinary via /api/upload */}
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="form-file-input"
-          onChange={handleImageFile}
-          disabled={uploading}
-        />
-
-        <span className="form-hint">
-          Uploaded images are stored on Cloudinary. Max 5MB. JPG, PNG or WEBP.
-        </span>
-
-        {/* Show Cloudinary public_id once uploaded */}
-        {form.imagePublicId && (
-          <span className="form-hint">
-            Cloudinary ID: <strong>{form.imagePublicId}</strong>
-          </span>
-        )}
-      </div>
-
-      {/* ── Category Name ─────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>Category Name *</label>
-        <input
-          type="text"
-          placeholder="e.g. Bangles"
-          value={form.name}
-          onChange={e => handleNameChange(e.target.value)}
-          autoFocus
-        />
-      </div>
-
-      {/* ── URL Slug ──────────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>URL Slug *</label>
-        <input
-          type="text"
-          placeholder="e.g. bangles"
-          value={form.slug}
-          onChange={e => set('slug', e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, ''))}
-        />
-        <span className="form-hint">
-          URL: /collections/<strong>{form.slug || 'slug'}</strong>
-        </span>
-      </div>
-
-      {/* ── Description ───────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>Description</label>
-        <textarea
-          placeholder="Shown on the collection page…"
-          value={form.description}
-          onChange={e => set('description', e.target.value)}
-          rows={3}
-        />
-      </div>
-
-      {/* ── Actions ───────────────────────────────────────────────────────── */}
-      <div className="modal-actions">
-        <button className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-        <button
-          className="btn btn-primary"
-          onClick={handleSubmit}
-          disabled={uploading}
-        >
-          {uploading ? 'Uploading…' : 'Save Category'}
-        </button>
-      </div>
-    </div>
-  );
+const labelStyle = {
+  display:'block', fontSize:'0.75rem', fontWeight:700,
+  letterSpacing:'0.06em', textTransform:'uppercase',
+  color:'#888', marginBottom:'0.5rem',
 };
 
-// ── Main AdminCategory ─────────────────────────────────────────────────────────
+const inputStyle = {
+  width:'100%', padding:'0.65rem 0.85rem',
+  border:'1px solid #e0d5c5', borderRadius:6,
+  fontFamily:'inherit', fontSize:'0.9rem',
+  background:'#faf7f2', outline:'none',
+  boxSizing:'border-box',
+};
+
 const AdminCategory = () => {
-  const {
-    categories,
-    addCategory,
-    updateCategory,
-    deleteCategory,
-    getProductCountForCategory,
-  } = useStore();
+  const [categories, setCategories] = useState([]);   // ← always []
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
 
-  const [modal,   setModal]   = useState(null);
-  const [editing, setEditing] = useState(null);
-  const [error,   setError]   = useState('');
-  const [saving,  setSaving]  = useState(false);
+  const [showModal,  setShowModal]  = useState(false);
+  const [editingId,  setEditingId]  = useState(null);
+  const [form,       setForm]       = useState(EMPTY_FORM);
+  const [formError,  setFormError]  = useState('');
+  const [saving,     setSaving]     = useState(false);
 
-  const openAdd    = () => { setEditing(null); setModal('add');  };
-  const openEdit   = (c) => { setEditing(c);   setModal('edit'); };
-  const closeModal = () => { setModal(null); setEditing(null); setError(''); };
-
-  const handleSave = async (data) => {
-    setSaving(true);
+  // ── Fetch categories ────────────────────────────────────────────────────────
+  const loadCategories = useCallback(async () => {
+    setLoading(true);
     setError('');
     try {
-      if (modal === 'add') await addCategory(data);
-      else await updateCategory(editing._id, data);
+      const res  = await fetchCategories();
+      // Backend returns { success, categories } — guard all shapes
+      const data = res.data?.categories || res.data?.data || res.data || [];
+      setCategories(Array.isArray(data) ? data : []);
+    } catch {
+      setError('Failed to load categories.');
+      setCategories([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadCategories(); }, [loadCategories]);
+
+  // ── Modal helpers ───────────────────────────────────────────────────────────
+  const openAdd = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setFormError('');
+    setShowModal(true);
+  };
+
+  const openEdit = (cat) => {
+    setForm({
+      name:        cat.name        || '',
+      description: cat.description || '',
+      isActive:    cat.isActive    ?? true,
+    });
+    setEditingId(cat._id);
+    setFormError('');
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setFormError('');
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    setFormError('');
+  };
+
+  // ── Save ────────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    setFormError('');
+    if (!form.name.trim()) return setFormError('Category name is required.');
+
+    setSaving(true);
+    try {
+      if (editingId) {
+        await updateCategory(editingId, {
+          name:        form.name.trim(),
+          description: form.description.trim(),
+          isActive:    form.isActive,
+        });
+      } else {
+        await createCategory({
+          name:        form.name.trim(),
+          description: form.description.trim(),
+        });
+      }
+      await loadCategories();
       closeModal();
     } catch (err) {
-      setError(err.message);
+      setFormError(err?.response?.data?.message || err?.message || 'Failed to save category.');
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Delete ──────────────────────────────────────────────────────────────────
   const handleDelete = async (id, name) => {
-    if (!window.confirm(`Delete "${name}"? Products in it will become uncategorised.`)) return;
+    if (!window.confirm(`Delete category "${name}"? Products in this category will need to be reassigned.`)) return;
     try {
       await deleteCategory(id);
+      setCategories(prev => prev.filter(c => c._id !== id));
     } catch (err) {
-      alert(err.message);
+      alert(err?.response?.data?.message || 'Failed to delete category.');
     }
   };
 
+  // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="admin-content">
 
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-6)' }}>
-        <h2 className="headline-md">Categories</h2>
-        <button className="btn btn-primary" onClick={openAdd}
-          style={{ padding: 'var(--spacing-3) var(--spacing-6)' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2rem' }}>
+        <div>
+          <h2 className="headline-md">Categories</h2>
+          <p className="body-md" style={{ color:'var(--on-surface-variant)', marginTop:4 }}>
+            {categories.length} categor{categories.length !== 1 ? 'ies' : 'y'}
+          </p>
+        </div>
+        <button onClick={openAdd} style={{
+          background:'#735c00', color:'#fff', border:'none', borderRadius:6,
+          padding:'0.65rem 1.4rem', fontFamily:'inherit', fontSize:'0.9rem',
+          fontWeight:600, cursor:'pointer',
+        }}>
           + Add Category
         </button>
       </div>
 
-      {/* Info banner */}
-      <div style={{
-        background: 'var(--surface-container-low)',
-        border: '1px solid var(--outline-variant)',
-        padding: 'var(--spacing-4) var(--spacing-6)',
-        marginBottom: 'var(--spacing-6)',
-        fontSize: '0.875rem',
-        color: 'var(--on-surface-variant)',
-        lineHeight: 1.6,
-      }}>
-        Categories appear in the navbar Collections dropdown and as filter links on the shop page.
-        Each slug is used in its URL. Images are uploaded to Cloudinary automatically.
-      </div>
-
-      {/* Error */}
       {error && (
-        <div style={{
-          background: 'rgba(186,26,26,0.06)',
-          border: '1px solid rgba(186,26,26,0.2)',
-          color: 'var(--on-error)',
-          padding: 'var(--spacing-4)',
-          marginBottom: 'var(--spacing-6)',
-          fontSize: '0.875rem',
-        }}>
+        <div style={{ background:'#fff0f0', border:'1px solid #ffcccc', color:'#c0392b', padding:'0.75rem 1rem', borderRadius:6, marginBottom:'1.5rem' }}>
           {error}
         </div>
       )}
 
       {/* Table */}
-      <div className="recent-activity">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th className="label-md">Image</th>
-              <th className="label-md">Category Name</th>
-              <th className="label-md">Slug / URL</th>
-              <th className="label-md">Description</th>
-              <th className="label-md">Products</th>
-              <th className="label-md">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {categories.length === 0 && (
-              <tr>
-                <td colSpan={6} style={{
-                  textAlign: 'center',
-                  padding: 'var(--spacing-12)',
-                  color: 'var(--on-surface-variant)',
-                }}>
-                  No categories yet — add your first one
-                </td>
+      {loading ? (
+        <p className="body-md" style={{ color:'var(--on-surface-variant)' }}>Loading categories…</p>
+      ) : (
+        <div style={{ background:'#fff', borderRadius:8, border:'1px solid #e8e0d5', overflow:'hidden' }}>
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr style={{ background:'#faf7f2', borderBottom:'1px solid #e8e0d5' }}>
+                {['Category Name','Slug','Products','Status','Actions'].map(h => (
+                  <th key={h} style={{ padding:'0.85rem 1rem', textAlign:'left', fontSize:'0.72rem', fontWeight:700, letterSpacing:'0.06em', color:'#888', textTransform:'uppercase' }}>
+                    {h}
+                  </th>
+                ))}
               </tr>
-            )}
-            {categories.map(c => (
-              <tr key={c._id}>
-                {/* Image thumbnail */}
-                <td>
-                  <div style={{
-                    width: 52,
-                    height: 52,
-                    background: 'var(--surface-container-low)',
-                    border: '1px solid var(--outline-variant)',
-                    overflow: 'hidden',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}>
-                    {c.image
-                      ? <img src={c.image} alt={c.name}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      : <span style={{ fontSize: '1.4rem' }}>🏷️</span>
-                    }
-                  </div>
-                </td>
+            </thead>
+            <tbody>
+              {categories.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding:'3rem', textAlign:'center', color:'#aaa' }}>
+                    No categories yet. Click "+ Add Category" to create one.
+                  </td>
+                </tr>
+              ) : (
+                categories.map((cat, i) => (
+                  <tr key={cat._id} style={{ borderBottom:'1px solid #f0ebe3', background: i % 2 === 0 ? '#fff' : '#fdfaf6' }}>
+                    <td style={{ padding:'0.9rem 1rem' }}>
+                      <div style={{ fontWeight:600, fontSize:'0.9rem' }}>{cat.name}</div>
+                      {cat.description && (
+                        <div style={{ fontSize:'0.78rem', color:'#aaa', marginTop:2, maxWidth:300, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                          {cat.description}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ padding:'0.9rem 1rem' }}>
+                      <code style={{ background:'#f0ebe3', padding:'0.2rem 0.5rem', borderRadius:4, fontSize:'0.82rem', color:'#735c00' }}>
+                        {cat.slug}
+                      </code>
+                    </td>
+                    <td style={{ padding:'0.9rem 1rem', fontSize:'0.88rem', color:'#555' }}>
+                      {cat.productCount ?? '—'}
+                    </td>
+                    <td style={{ padding:'0.9rem 1rem' }}>
+                      <span style={{
+                        background: cat.isActive ? '#dcfce7' : '#fee2e2',
+                        color:      cat.isActive ? '#166534' : '#991b1b',
+                        padding:'0.25rem 0.75rem', borderRadius:20,
+                        fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase',
+                      }}>
+                        {cat.isActive ? 'Active' : 'Inactive'}
+                      </span>
+                    </td>
+                    <td style={{ padding:'0.9rem 1rem' }}>
+                      <div style={{ display:'flex', gap:6 }}>
+                        <button onClick={() => openEdit(cat)} style={{
+                          background:'#faf7f2', border:'1px solid #ddd', borderRadius:5,
+                          padding:'0.35rem 0.8rem', cursor:'pointer', fontSize:'0.8rem', fontWeight:500,
+                        }}>Edit</button>
+                        <button onClick={() => handleDelete(cat._id, cat.name)} style={{
+                          background:'#fff0f0', border:'1px solid #ffcccc', color:'#c0392b',
+                          borderRadius:5, padding:'0.35rem 0.8rem', cursor:'pointer', fontSize:'0.8rem', fontWeight:500,
+                        }}>Delete</button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-                <td>
-                  <span className="body-lg" style={{ fontWeight: 500 }}>{c.name}</span>
-                </td>
-
-                <td>
-                  <code style={{
-                    background: 'var(--surface-container-low)',
-                    padding: '3px 10px',
-                    fontSize: '0.78rem',
-                    color: 'var(--primary)',
-                    fontFamily: 'monospace',
-                    border: '1px solid var(--outline-variant)',
-                  }}>
-                    /collections/{c.slug}
-                  </code>
-                </td>
-
-                <td>
-                  <span className="body-lg" style={{
-                    color: 'var(--on-surface-variant)',
-                    display: 'block',
-                    maxWidth: 240,
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                  }}>
-                    {c.description || '—'}
-                  </span>
-                </td>
-
-                <td className="body-lg">{getProductCountForCategory(c.slug)}</td>
-
-                <td>
-                  <div style={{ display: 'flex', gap: 12 }}>
-                    <button className="btn btn-tertiary" onClick={() => openEdit(c)}>Edit</button>
-                    <button
-                      className="btn btn-tertiary"
-                      onClick={() => handleDelete(c._id, c.name)}
-                      style={{ color: 'var(--on-error)' }}
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal */}
-      <Modal
-        isOpen={!!modal}
-        onClose={closeModal}
-        title={modal === 'add' ? 'Add New Category' : 'Edit Category'}
-        size="sm"
-      >
-        {saving && (
-          <p style={{ fontSize: '0.875rem', color: 'var(--on-surface-variant)', marginBottom: 'var(--spacing-4)' }}>
-            Saving…
-          </p>
-        )}
-        {error && (
+      {/* ── Modal ──────────────────────────────────────────────────────────── */}
+      {showModal && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(26,16,6,0.55)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          zIndex:1000, padding:'1rem',
+        }}>
           <div style={{
-            background: 'rgba(186,26,26,0.06)',
-            border: '1px solid rgba(186,26,26,0.2)',
-            color: 'var(--on-error)',
-            padding: 'var(--spacing-4)',
-            marginBottom: 'var(--spacing-4)',
-            fontSize: '0.875rem',
+            background:'#fff', borderRadius:12, width:'100%', maxWidth:520,
+            boxShadow:'0 24px 48px rgba(0,0,0,0.18)',
           }}>
-            {error}
+
+            {/* Header */}
+            <div style={{
+              display:'flex', justifyContent:'space-between', alignItems:'center',
+              padding:'1.5rem 2rem', borderBottom:'1px solid #f0ebe3',
+            }}>
+              <div>
+                <h3 style={{ margin:0, fontWeight:700, fontSize:'1.2rem' }}>
+                  {editingId ? 'Edit Category' : 'Add New Category'}
+                </h3>
+                <p style={{ margin:'2px 0 0', fontSize:'0.82rem', color:'#888' }}>
+                  Slug is auto-generated from the name
+                </p>
+              </div>
+              <button onClick={closeModal} style={{
+                background:'#f5f5f5', border:'none', borderRadius:'50%',
+                width:36, height:36, cursor:'pointer', fontSize:'1.1rem',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}>✕</button>
+            </div>
+
+            <div style={{ padding:'2rem' }}>
+              {formError && (
+                <div style={{ background:'#fff0f0', border:'1px solid #ffcccc', color:'#c0392b', padding:'0.75rem 1rem', borderRadius:8, marginBottom:'1.5rem', fontSize:'0.88rem' }}>
+                  ⚠ {formError}
+                </div>
+              )}
+
+              {/* Name */}
+              <div style={{ marginBottom:'1.25rem' }}>
+                <label style={labelStyle}>Category Name *</label>
+                <input name="name" value={form.name} onChange={handleChange}
+                  placeholder="e.g. Bangles" style={inputStyle} />
+                {form.name && (
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                    Slug: <code style={{ color:'#735c00' }}>
+                      {form.name.toLowerCase().trim().replace(/[^a-z0-9\s-]/g,'').replace(/\s+/g,'-')}
+                    </code>
+                  </p>
+                )}
+              </div>
+
+              {/* Description */}
+              <div style={{ marginBottom:'1.25rem' }}>
+                <label style={labelStyle}>Description</label>
+                <textarea name="description" value={form.description} onChange={handleChange}
+                  placeholder="Optional description shown on the collection page…" rows={3}
+                  style={{ ...inputStyle, resize:'vertical', lineHeight:1.6 }} />
+              </div>
+
+              {/* Active toggle — only shown when editing */}
+              {editingId && (
+                <div style={{ marginBottom:'1.5rem', display:'flex', alignItems:'center', gap:10 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
+                    <div
+                      onClick={() => setForm(prev => ({ ...prev, isActive: !prev.isActive }))}
+                      style={{
+                        width:44, height:24, borderRadius:12, cursor:'pointer',
+                        background: form.isActive ? '#735c00' : '#ddd',
+                        position:'relative', transition:'background 0.2s', flexShrink:0,
+                      }}
+                    >
+                      <div style={{
+                        position:'absolute', top:2,
+                        left: form.isActive ? 22 : 2,
+                        width:20, height:20, borderRadius:'50%', background:'#fff',
+                        transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:'0.9rem' }}>
+                        {form.isActive ? 'Active' : 'Inactive'}
+                      </div>
+                      <div style={{ fontSize:'0.77rem', color:'#aaa' }}>
+                        {form.isActive ? 'Visible in Collections menu' : 'Hidden from store'}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.75rem', paddingTop:'1.25rem', borderTop:'1px solid #f0ebe3' }}>
+                <button onClick={closeModal} disabled={saving} style={{
+                  background:'#f5f5f5', border:'1px solid #ddd', borderRadius:8,
+                  padding:'0.7rem 1.8rem', cursor:'pointer',
+                  fontFamily:'inherit', fontSize:'0.9rem', fontWeight:500,
+                }}>Cancel</button>
+                <button onClick={handleSave} disabled={saving} style={{
+                  background: saving ? '#ccc' : '#735c00', color:'#fff',
+                  border:'none', borderRadius:8, padding:'0.7rem 2rem',
+                  cursor: saving ? 'not-allowed' : 'pointer',
+                  fontFamily:'inherit', fontSize:'0.9rem', fontWeight:600,
+                }}>
+                  {saving ? 'Saving…' : editingId ? 'Update Category' : 'Create Category'}
+                </button>
+              </div>
+            </div>
           </div>
-        )}
-        <CategoryForm
-          initial={editing}
-          onSave={handleSave}
-          onCancel={closeModal}
-        />
-      </Modal>
+        </div>
+      )}
     </div>
   );
 };
