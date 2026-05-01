@@ -86,9 +86,9 @@ const CategoryPage = () => {
     // Safe check — ensure products is always an array
     const productList = Array.isArray(products) ? products : [];
     
-    let list = isAll
-      ? [...productList]
-      : productList.filter(p => p.categorySlug === category);
+let list = isAll
+  ? [...productList]
+  : productList.filter(p => p.category?.slug === category);
 
     const { min, max } = activeBounds;
     list = list.filter(p => {

@@ -136,7 +136,22 @@ export const StoreProvider = ({ children }) => {
 
   // Load cart count on mount
   useEffect(() => { fetchCartCount(); }, [fetchCartCount]);
-
+  // Add this useEffect inside StoreProvider, after the existing mount useEffect
+useEffect(() => {
+  const handleVisible = () => {
+    if (document.visibilityState === 'visible') {
+      // Re-fetch products when user returns to the tab
+      publicClient.get('/products')
+        .then(res => {
+          const data = res.data?.products || res.data?.data || res.data || [];
+          setProducts(Array.isArray(data) ? data : []);
+        })
+        .catch(() => {});
+    }
+  };
+  document.addEventListener('visibilitychange', handleVisible);
+  return () => document.removeEventListener('visibilitychange', handleVisible);
+}, []);
   return (
     <StoreContext.Provider value={{
       // Products & Categories — used by CategoryPage, FeaturedGrid, etc.
