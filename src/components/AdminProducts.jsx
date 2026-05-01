@@ -13,11 +13,25 @@ const EMPTY_FORM = {
   material:    '',
   category:    '',
   price:       '',
-  stockStatus: 'in_stock',   // ← replaces stock: ''
+  stock:       '10',
   description: '',
   isFeatured:  false,
   image:       '',
   gallery:     [],
+};
+
+const labelStyle = {
+  display:'block', fontSize:'0.75rem', fontWeight:700,
+  letterSpacing:'0.06em', textTransform:'uppercase',
+  color:'#888', marginBottom:'0.5rem',
+};
+
+const inputStyle = {
+  width:'100%', padding:'0.65rem 0.85rem',
+  border:'1px solid #e0d5c5', borderRadius:6,
+  fontFamily:'inherit', fontSize:'0.9rem',
+  background:'#faf7f2', outline:'none',
+  boxSizing:'border-box',
 };
 
 const AdminProducts = () => {
@@ -56,7 +70,7 @@ const AdminProducts = () => {
 
   useEffect(() => { loadData(); }, [loadData]);
 
-  // ── Modal open/close ──────────────────────────────────────────────────────
+  // ── Modal ─────────────────────────────────────────────────────────────────
   const openAdd = () => {
     setForm(EMPTY_FORM);
     setEditingId(null);
@@ -64,22 +78,22 @@ const AdminProducts = () => {
     setShowModal(true);
   };
 
-const openEdit = (p) => {
-  setForm({
-    title:       p.title       || '',
-    material:    p.material    || '',
-    category:    p.category?._id || p.category || '',
-    price:       p.price       ?? '',
-    stockStatus: p.stockStatus || 'in_stock',  // ← replaces stock: p.stock ?? ''
-    description: p.description || '',
-    isFeatured:  p.isFeatured  || false,
-    image:       p.image?.url  || p.image || '',
-    gallery:     Array.isArray(p.gallery) ? p.gallery : [],
-  });
-  setEditingId(p._id);
-  setFormError('');
-  setShowModal(true);
-};
+  const openEdit = (p) => {
+    setForm({
+      title:       p.title             || '',
+      material:    p.material          || '',
+      category:    p.category?._id     || p.category || '',
+      price:       p.price             ?? '',
+      stock:       p.stock             ?? 10,
+      description: p.description       || '',
+      isFeatured:  p.isFeatured        || false,
+      image:       p.image?.url        || p.image || '',
+      gallery:     Array.isArray(p.gallery) ? p.gallery : [],
+    });
+    setEditingId(p._id);
+    setFormError('');
+    setShowModal(true);
+  };
 
   const closeModal = () => {
     setShowModal(false);
@@ -126,7 +140,10 @@ const openEdit = (p) => {
         const res = await uploadImage(fd);
         return res.data?.media?.secureUrl || res.data?.media?.url || '';
       }));
-      setForm(prev => ({ ...prev, gallery: [...(prev.gallery || []), ...urls.filter(Boolean)] }));
+      setForm(prev => ({
+        ...prev,
+        gallery: [...(prev.gallery || []), ...urls.filter(Boolean)],
+      }));
     } catch {
       setFormError('Gallery upload failed.');
     } finally {
@@ -134,43 +151,44 @@ const openEdit = (p) => {
     }
   };
 
-  // ── Save product ──────────────────────────────────────────────────────────
-const handleSave = async () => {
-  setFormError('');
-  if (!form.title.trim())       return setFormError('Product name is required.');
-  if (!form.material.trim())    return setFormError('Material is required.');
-  if (!form.category)           return setFormError('Please select a category.');
-  if (!form.price)              return setFormError('Price is required.');
-  if (!form.image)              return setFormError('Please upload a product image.');
-  if (!form.description.trim()) return setFormError('Description is required.');
+  // ── Save ──────────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    setFormError('');
+    if (!form.title.trim())       return setFormError('Product name is required.');
+    if (!form.material.trim())    return setFormError('Material is required.');
+    if (!form.category)           return setFormError('Please select a category.');
+    if (!form.price)              return setFormError('Price is required.');
+    if (!form.image)              return setFormError('Please upload a product image.');
+    if (!form.description.trim()) return setFormError('Description is required.');
 
-  setSaving(true);
-  try {
-    const payload = {
-      title:       form.title.trim(),
-      material:    form.material.trim(),
-      category:    form.category,
-      price:       Number(form.price),
-      image:       { url: form.image },
-      description: form.description.trim(),
-      isFeatured:  form.isFeatured,
-      gallery:     Array.isArray(form.gallery) ? form.gallery : [],
-      stockStatus: form.stockStatus || 'in_stock',  // ← direct, no auto-conversion
-    };
+    setSaving(true);
+    try {
+      const payload = {
+        title:       form.title.trim(),
+        material:    form.material.trim(),
+        category:    form.category,
+        price:       Number(form.price),
+        image:       { url: form.image },
+        description: form.description.trim(),
+        isFeatured:  form.isFeatured,
+        gallery:     Array.isArray(form.gallery) ? form.gallery : [],
+        stock:       Number(form.stock) || 0,
+        // stockStatus is auto-computed by backend pre-save hook — never sent manually
+      };
 
-    if (editingId) {
-      await updateProduct(editingId, payload);
-    } else {
-      await createProduct(payload);
+      if (editingId) {
+        await updateProduct(editingId, payload);
+      } else {
+        await createProduct(payload);
+      }
+      await loadData();
+      closeModal();
+    } catch (err) {
+      setFormError(err?.response?.data?.message || err?.message || 'Failed to save product.');
+    } finally {
+      setSaving(false);
     }
-    await loadData();
-    closeModal();
-  } catch (err) {
-    setFormError(err?.response?.data?.message || err?.message || 'Failed to save product.');
-  } finally {
-    setSaving(false);
-  }
-};
+  };
 
   // ── Delete / Featured toggle ──────────────────────────────────────────────
   const handleDelete = async (id, title) => {
@@ -186,19 +204,21 @@ const handleSave = async () => {
   const handleToggleFeatured = async (id, current) => {
     try {
       await updateProduct(id, { isFeatured: !current });
-      setProducts(prev => prev.map(p => p._id === id ? { ...p, isFeatured: !current } : p));
+      setProducts(prev =>
+        prev.map(p => p._id === id ? { ...p, isFeatured: !current } : p)
+      );
     } catch {
       alert('Failed to update featured status.');
     }
   };
 
-  const stockLabel = (s) => ({
-    in_stock:    { text: 'In Stock',    cls: 'status-delivered' },
-    low_stock:   { text: 'Low Stock',   cls: 'status-shipped'   },
-    out_of_stock:{ text: 'Out of Stock',cls: 'status-pending'   },
-  }[s] || { text: s || '—', cls: 'status-pending' });
+  const stockBadge = (s) => ({
+    in_stock:     { text: 'In Stock',     cls: 'status-delivered' },
+    low_stock:    { text: 'Low Stock',    cls: 'status-shipped'   },
+    out_of_stock: { text: 'Out of Stock', cls: 'status-pending'   },
+  }[s] || { text: 'In Stock', cls: 'status-delivered' });
 
-  // ────────────────────────────────────────────────────────────────────────────
+  // ── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="admin-content">
 
@@ -211,10 +231,9 @@ const handleSave = async () => {
           </p>
         </div>
         <button onClick={openAdd} style={{
-          background:'var(--primary, #735c00)', color:'#fff',
-          border:'none', borderRadius:6, padding:'0.65rem 1.4rem',
-          fontFamily:'inherit', fontSize:'0.9rem', fontWeight:600,
-          cursor:'pointer', display:'flex', alignItems:'center', gap:6,
+          background:'#735c00', color:'#fff', border:'none', borderRadius:6,
+          padding:'0.65rem 1.4rem', fontFamily:'inherit', fontSize:'0.9rem',
+          fontWeight:600, cursor:'pointer',
         }}>
           + Add Product
         </button>
@@ -230,12 +249,12 @@ const handleSave = async () => {
       {loading ? (
         <p className="body-md" style={{ color:'var(--on-surface-variant)' }}>Loading products…</p>
       ) : (
-        <div style={{ background:'#fff', borderRadius:8, border:'1px solid var(--surface-container-highest, #e8e0d5)', overflow:'hidden' }}>
+        <div style={{ background:'#fff', borderRadius:8, border:'1px solid #e8e0d5', overflow:'hidden' }}>
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
-              <tr style={{ background:'var(--surface-container-low, #faf7f2)', borderBottom:'1px solid var(--surface-container-highest, #e8e0d5)' }}>
+              <tr style={{ background:'#faf7f2', borderBottom:'1px solid #e8e0d5' }}>
                 {['Image','Product Name','Category','Price','Stock','Featured','Actions'].map(h => (
-                  <th key={h} style={{ padding:'0.85rem 1rem', textAlign:'left', fontSize:'0.72rem', fontWeight:700, letterSpacing:'0.06em', color:'var(--on-surface-variant)', textTransform:'uppercase' }}>
+                  <th key={h} style={{ padding:'0.85rem 1rem', textAlign:'left', fontSize:'0.72rem', fontWeight:700, letterSpacing:'0.06em', color:'#888', textTransform:'uppercase' }}>
                     {h}
                   </th>
                 ))}
@@ -244,55 +263,60 @@ const handleSave = async () => {
             <tbody>
               {products.length === 0 ? (
                 <tr>
-                  <td colSpan={7} style={{ padding:'3rem', textAlign:'center', color:'var(--on-surface-variant)' }}>
+                  <td colSpan={7} style={{ padding:'3rem', textAlign:'center', color:'#aaa' }}>
                     No products yet. Click "+ Add Product" to get started.
                   </td>
                 </tr>
               ) : products.map((p, i) => {
-                const sl = stockLabel(p.stockStatus);
+                const badge = stockBadge(p.stockStatus);
                 return (
-                  <tr key={p._id} style={{ borderBottom:'1px solid var(--surface-container-highest, #e8e0d5)', background: i % 2 === 0 ? '#fff' : 'var(--surface-container-lowest, #fdfaf6)' }}>
+                  <tr key={p._id} style={{ borderBottom:'1px solid #f0ebe3', background: i % 2 === 0 ? '#fff' : '#fdfaf6' }}>
                     <td style={{ padding:'0.75rem 1rem' }}>
                       {p.image?.url || p.image ? (
                         <img src={p.image?.url || p.image} alt={p.title}
                           style={{ width:48, height:48, objectFit:'cover', borderRadius:6, border:'1px solid #eee' }} />
                       ) : (
-                        <div style={{ width:48, height:48, background:'#f0ebe3', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', color:'#bbb', fontSize:'1.2rem' }}>
+                        <div style={{ width:48, height:48, background:'#f0ebe3', borderRadius:6, display:'flex', alignItems:'center', justifyContent:'center', color:'#ccc', fontSize:'1.2rem' }}>
                           🖼
                         </div>
                       )}
                     </td>
                     <td style={{ padding:'0.75rem 1rem' }}>
                       <div style={{ fontWeight:500, fontSize:'0.9rem' }}>{p.title}</div>
-                      <div style={{ fontSize:'0.78rem', color:'var(--on-surface-variant)', marginTop:2 }}>{p.material}</div>
+                      <div style={{ fontSize:'0.78rem', color:'#aaa', marginTop:2 }}>{p.material}</div>
                     </td>
-                    <td style={{ padding:'0.75rem 1rem', fontSize:'0.88rem', color:'var(--on-surface-variant)' }}>
+                    <td style={{ padding:'0.75rem 1rem', fontSize:'0.88rem', color:'#666' }}>
                       {p.category?.name || '—'}
                     </td>
                     <td style={{ padding:'0.75rem 1rem', fontWeight:600, fontSize:'0.9rem' }}>
                       ₹{(p.price || 0).toLocaleString('en-IN')}
                     </td>
                     <td style={{ padding:'0.75rem 1rem' }}>
-                      <span className={`status-badge ${sl.cls}`} style={{ fontSize:'0.75rem' }}>{sl.text}</span>
+                      <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
+                        <span className={`status-badge ${badge.cls}`} style={{ fontSize:'0.73rem' }}>
+                          {badge.text}
+                        </span>
+                        <span style={{ fontSize:'0.75rem', color:'#aaa' }}>
+                          Qty: {p.stock ?? '—'}
+                        </span>
+                      </div>
                     </td>
                     <td style={{ padding:'0.75rem 1rem', textAlign:'center' }}>
                       <button onClick={() => handleToggleFeatured(p._id, p.isFeatured)}
                         style={{ background:'none', border:'none', cursor:'pointer', fontSize:'1.3rem', color: p.isFeatured ? '#b39d00' : '#ccc' }}
-                        title={p.isFeatured ? 'Remove from featured' : 'Feature on homepage'}>
+                        title={p.isFeatured ? 'Remove from featured' : 'Add to featured'}>
                         ★
                       </button>
                     </td>
                     <td style={{ padding:'0.75rem 1rem' }}>
                       <div style={{ display:'flex', gap:6 }}>
                         <button onClick={() => openEdit(p)} style={{
-                          background:'var(--surface-container-low, #faf7f2)', border:'1px solid #ddd',
-                          borderRadius:5, padding:'0.35rem 0.8rem', cursor:'pointer',
-                          fontSize:'0.8rem', fontWeight:500,
+                          background:'#faf7f2', border:'1px solid #ddd', borderRadius:5,
+                          padding:'0.35rem 0.8rem', cursor:'pointer', fontSize:'0.8rem', fontWeight:500,
                         }}>Edit</button>
                         <button onClick={() => handleDelete(p._id, p.title)} style={{
                           background:'#fff0f0', border:'1px solid #ffcccc', color:'#c0392b',
-                          borderRadius:5, padding:'0.35rem 0.8rem', cursor:'pointer',
-                          fontSize:'0.8rem', fontWeight:500,
+                          borderRadius:5, padding:'0.35rem 0.8rem', cursor:'pointer', fontSize:'0.8rem', fontWeight:500,
                         }}>Delete</button>
                       </div>
                     </td>
@@ -304,7 +328,7 @@ const handleSave = async () => {
         </div>
       )}
 
-      {/* ── Aesthetic Modal ───────────────────────────────────────────────────── */}
+      {/* ── Modal ──────────────────────────────────────────────────────────── */}
       {showModal && (
         <div style={{
           position:'fixed', inset:0, background:'rgba(26,16,6,0.55)',
@@ -312,9 +336,9 @@ const handleSave = async () => {
           zIndex:1000, padding:'1rem',
         }}>
           <div style={{
-            background:'#fff', borderRadius:12,
-            width:'100%', maxWidth:700, maxHeight:'92vh',
-            overflowY:'auto', boxShadow:'0 24px 48px rgba(0,0,0,0.18)',
+            background:'#fff', borderRadius:12, width:'100%', maxWidth:700,
+            maxHeight:'92vh', overflowY:'auto',
+            boxShadow:'0 24px 48px rgba(0,0,0,0.18)',
           }}>
 
             {/* Modal header */}
@@ -340,12 +364,10 @@ const handleSave = async () => {
 
             <div style={{ padding:'2rem' }}>
 
-              {/* Error banner */}
               {formError && (
                 <div style={{
                   background:'#fff0f0', border:'1px solid #ffcccc', color:'#c0392b',
-                  padding:'0.75rem 1rem', borderRadius:8, marginBottom:'1.5rem',
-                  fontSize:'0.88rem', display:'flex', alignItems:'center', gap:8,
+                  padding:'0.75rem 1rem', borderRadius:8, marginBottom:'1.5rem', fontSize:'0.88rem',
                 }}>
                   ⚠ {formError}
                 </div>
@@ -353,9 +375,7 @@ const handleSave = async () => {
 
               {/* Main Image */}
               <div style={{ marginBottom:'1.5rem' }}>
-                <label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'#888', marginBottom:'0.6rem' }}>
-                  Product Image (Main) *
-                </label>
+                <label style={labelStyle}>Product Image (Main) *</label>
                 {form.image ? (
                   <div style={{ position:'relative', marginBottom:'0.75rem' }}>
                     <img src={form.image} alt="Preview" style={{
@@ -363,9 +383,9 @@ const handleSave = async () => {
                       borderRadius:8, border:'2px solid #f0ebe3', background:'#faf7f2',
                     }} />
                     <button onClick={() => setForm(prev => ({ ...prev, image: '' }))} style={{
-                      position:'absolute', top:8, right:8,
-                      background:'rgba(0,0,0,0.6)', color:'#fff', border:'none',
-                      borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:'0.8rem',
+                      position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)',
+                      color:'#fff', border:'none', borderRadius:'50%', width:28, height:28,
+                      cursor:'pointer', fontSize:'0.8rem',
                     }}>✕</button>
                   </div>
                 ) : (
@@ -379,8 +399,7 @@ const handleSave = async () => {
                 )}
                 <label style={{
                   display:'inline-flex', alignItems:'center', gap:8,
-                  background:'var(--surface-container-low, #faf7f2)',
-                  border:'1px solid #ddd', borderRadius:6,
+                  background:'#faf7f2', border:'1px solid #ddd', borderRadius:6,
                   padding:'0.5rem 1rem', cursor:'pointer', fontSize:'0.85rem', fontWeight:500,
                 }}>
                   {imageUploading ? '⏳ Uploading…' : '📁 Choose Image'}
@@ -389,10 +408,13 @@ const handleSave = async () => {
                 </label>
               </div>
 
-              {/* Gallery Images */}
+              {/* Gallery */}
               <div style={{ marginBottom:'1.5rem' }}>
-                <label style={{ display:'block', fontSize:'0.75rem', fontWeight:700, letterSpacing:'0.06em', textTransform:'uppercase', color:'#888', marginBottom:'0.6rem' }}>
-                  Gallery Images <span style={{ fontWeight:400, textTransform:'none' }}>(optional · swipe on product page)</span>
+                <label style={labelStyle}>
+                  Gallery Images{' '}
+                  <span style={{ fontWeight:400, textTransform:'none', letterSpacing:0 }}>
+                    (optional · swipe on product page)
+                  </span>
                 </label>
                 {form.gallery?.length > 0 && (
                   <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginBottom:'0.75rem' }}>
@@ -400,7 +422,7 @@ const handleSave = async () => {
                       <div key={i} style={{ position:'relative' }}>
                         <img src={url} alt="" style={{ width:64, height:64, objectFit:'cover', borderRadius:6, border:'1px solid #eee' }} />
                         <button onClick={() => setForm(prev => ({ ...prev, gallery: prev.gallery.filter((_, gi) => gi !== i) }))}
-                          style={{ position:'absolute', top:-6, right:-6, background:'#c0392b', color:'#fff', border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', fontSize:'0.7rem', lineHeight:'20px', textAlign:'center' }}>
+                          style={{ position:'absolute', top:-6, right:-6, background:'#c0392b', color:'#fff', border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', fontSize:'0.7rem' }}>
                           ✕
                         </button>
                       </div>
@@ -409,8 +431,7 @@ const handleSave = async () => {
                 )}
                 <label style={{
                   display:'inline-flex', alignItems:'center', gap:8,
-                  background:'var(--surface-container-low, #faf7f2)',
-                  border:'1px solid #ddd', borderRadius:6,
+                  background:'#faf7f2', border:'1px solid #ddd', borderRadius:6,
                   padding:'0.5rem 1rem', cursor:'pointer', fontSize:'0.85rem', fontWeight:500,
                 }}>
                   {galleryUploading ? '⏳ Uploading…' : '🖼 Choose Files'}
@@ -420,7 +441,6 @@ const handleSave = async () => {
                 <p style={{ margin:'0.4rem 0 0', fontSize:'0.78rem', color:'#aaa' }}>Select multiple files at once</p>
               </div>
 
-              {/* Divider */}
               <hr style={{ border:'none', borderTop:'1px solid #f0ebe3', margin:'0 0 1.5rem' }} />
 
               {/* Name + Material */}
@@ -455,32 +475,39 @@ const handleSave = async () => {
                 </div>
               </div>
 
-              {/* Stock + Featured */}
+              {/* Stock Count + Featured */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1.25rem' }}>
                 <div>
-  <label style={labelStyle}>Stock Status</label>
-  <select name="stockStatus" value={form.stockStatus} onChange={handleChange} style={inputStyle}>
-    <option value="in_stock">In Stock</option>
-    <option value="low_stock">Low Stock</option>
-    <option value="out_of_stock">Out of Stock</option>
-  </select>
-</div>
+                  <label style={labelStyle}>Stock Count</label>
+                  <input
+                    name="stock"
+                    type="number"
+                    value={form.stock}
+                    onChange={handleChange}
+                    placeholder="e.g. 10"
+                    min="0"
+                    style={inputStyle}
+                  />
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                    0 = Out of stock &nbsp;·&nbsp; 1–5 = Low stock &nbsp;·&nbsp; 6+ = In stock
+                  </p>
+                </div>
                 <div style={{ display:'flex', alignItems:'center', paddingTop:'1.6rem' }}>
                   <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
-                    <div style={{ position:'relative' }}>
-                      <input type="checkbox" name="isFeatured" checked={form.isFeatured} onChange={handleChange}
-                        style={{ position:'absolute', opacity:0, width:0, height:0 }} />
-                      <div style={{
-                        width:44, height:24, borderRadius:12, transition:'background 0.2s',
+                    <div
+                      onClick={() => setForm(prev => ({ ...prev, isFeatured: !prev.isFeatured }))}
+                      style={{
+                        width:44, height:24, borderRadius:12, cursor:'pointer',
                         background: form.isFeatured ? '#735c00' : '#ddd',
-                        position:'relative',
-                      }}>
-                        <div style={{
-                          position:'absolute', top:2, left: form.isFeatured ? 22 : 2,
-                          width:20, height:20, borderRadius:'50%', background:'#fff',
-                          transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
-                        }} />
-                      </div>
+                        position:'relative', transition:'background 0.2s', flexShrink:0,
+                      }}
+                    >
+                      <div style={{
+                        position:'absolute', top:2,
+                        left: form.isFeatured ? 22 : 2,
+                        width:20, height:20, borderRadius:'50%', background:'#fff',
+                        transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
+                      }} />
                     </div>
                     <div>
                       <div style={{ fontWeight:600, fontSize:'0.9rem' }}>Feature on homepage</div>
@@ -507,15 +534,12 @@ const handleSave = async () => {
                   background:'#f5f5f5', border:'1px solid #ddd', borderRadius:8,
                   padding:'0.7rem 1.8rem', cursor:'pointer',
                   fontFamily:'inherit', fontSize:'0.9rem', fontWeight:500,
-                }}>
-                  Cancel
-                </button>
+                }}>Cancel</button>
                 <button onClick={handleSave} disabled={saving || imageUploading} style={{
-                  background: saving ? '#ccc' : '#735c00',
-                  color:'#fff', border:'none', borderRadius:8,
-                  padding:'0.7rem 2rem', cursor: saving ? 'not-allowed' : 'pointer',
+                  background: saving ? '#ccc' : '#735c00', color:'#fff',
+                  border:'none', borderRadius:8, padding:'0.7rem 2rem',
+                  cursor: saving ? 'not-allowed' : 'pointer',
                   fontFamily:'inherit', fontSize:'0.9rem', fontWeight:600,
-                  transition:'background 0.2s',
                 }}>
                   {saving ? 'Saving…' : editingId ? 'Update Product' : 'Save Product'}
                 </button>
@@ -527,21 +551,6 @@ const handleSave = async () => {
       )}
     </div>
   );
-};
-
-// ── Shared input styles ─────────────────────────────────────────────────────
-const labelStyle = {
-  display:'block', fontSize:'0.75rem', fontWeight:700,
-  letterSpacing:'0.06em', textTransform:'uppercase',
-  color:'#888', marginBottom:'0.5rem',
-};
-
-const inputStyle = {
-  width:'100%', padding:'0.65rem 0.85rem',
-  border:'1px solid #e0d5c5', borderRadius:6,
-  fontFamily:'inherit', fontSize:'0.9rem',
-  background:'#faf7f2', outline:'none',
-  boxSizing:'border-box',
 };
 
 export default AdminProducts;
