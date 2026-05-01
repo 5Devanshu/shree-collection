@@ -13,7 +13,7 @@ const EMPTY_FORM = {
   material:    '',
   category:    '',
   price:       '',
-  stock:       '',
+  stockStatus: 'in_stock',   // ← replaces stock: ''
   description: '',
   isFeatured:  false,
   image:       '',
@@ -64,22 +64,22 @@ const AdminProducts = () => {
     setShowModal(true);
   };
 
-  const openEdit = (p) => {
-    setForm({
-      title:       p.title       || '',
-      material:    p.material    || '',
-      category:    p.category?._id || p.category || '',
-      price:       p.price       ?? '',
-      stock:       p.stock       ?? '',
-      description: p.description || '',
-      isFeatured:  p.isFeatured  || false,
-      image:       p.image?.url  || p.image || '',
-      gallery:     Array.isArray(p.gallery) ? p.gallery : [],
-    });
-    setEditingId(p._id);
-    setFormError('');
-    setShowModal(true);
-  };
+const openEdit = (p) => {
+  setForm({
+    title:       p.title       || '',
+    material:    p.material    || '',
+    category:    p.category?._id || p.category || '',
+    price:       p.price       ?? '',
+    stockStatus: p.stockStatus || 'in_stock',  // ← replaces stock: p.stock ?? ''
+    description: p.description || '',
+    isFeatured:  p.isFeatured  || false,
+    image:       p.image?.url  || p.image || '',
+    gallery:     Array.isArray(p.gallery) ? p.gallery : [],
+  });
+  setEditingId(p._id);
+  setFormError('');
+  setShowModal(true);
+};
 
   const closeModal = () => {
     setShowModal(false);
@@ -135,47 +135,42 @@ const AdminProducts = () => {
   };
 
   // ── Save product ──────────────────────────────────────────────────────────
-  const handleSave = async () => {
-    setFormError('');
-    if (!form.title.trim())       return setFormError('Product name is required.');
-    if (!form.material.trim())    return setFormError('Material is required.');
-    if (!form.category)           return setFormError('Please select a category.');
-    if (!form.price)              return setFormError('Price is required.');
-    if (!form.image)              return setFormError('Please upload a product image.');
-    if (!form.description.trim()) return setFormError('Description is required.');
+const handleSave = async () => {
+  setFormError('');
+  if (!form.title.trim())       return setFormError('Product name is required.');
+  if (!form.material.trim())    return setFormError('Material is required.');
+  if (!form.category)           return setFormError('Please select a category.');
+  if (!form.price)              return setFormError('Price is required.');
+  if (!form.image)              return setFormError('Please upload a product image.');
+  if (!form.description.trim()) return setFormError('Description is required.');
 
-    setSaving(true);
-    try {
-      const stockQty = Number(form.stock) || 0;
-      const payload = {
-        title:       form.title.trim(),
-        material:    form.material.trim(),
-        category:    form.category,
-        price:       Number(form.price),
-        // ✅ model expects { url: string } not a plain string
-        image:       { url: form.image },
-        description: form.description.trim(),
-        isFeatured:  form.isFeatured,
-        gallery:     Array.isArray(form.gallery) ? form.gallery : [],
-        // ✅ model uses stockStatus enum, not stock number
-        stockStatus: stockQty === 0 ? 'out_of_stock'
-                   : stockQty <= 5  ? 'low_stock'
-                   : 'in_stock',
-      };
+  setSaving(true);
+  try {
+    const payload = {
+      title:       form.title.trim(),
+      material:    form.material.trim(),
+      category:    form.category,
+      price:       Number(form.price),
+      image:       { url: form.image },
+      description: form.description.trim(),
+      isFeatured:  form.isFeatured,
+      gallery:     Array.isArray(form.gallery) ? form.gallery : [],
+      stockStatus: form.stockStatus || 'in_stock',  // ← direct, no auto-conversion
+    };
 
-      if (editingId) {
-        await updateProduct(editingId, payload);
-      } else {
-        await createProduct(payload);
-      }
-      await loadData();
-      closeModal();
-    } catch (err) {
-      setFormError(err?.response?.data?.message || err?.message || 'Failed to save product.');
-    } finally {
-      setSaving(false);
+    if (editingId) {
+      await updateProduct(editingId, payload);
+    } else {
+      await createProduct(payload);
     }
-  };
+    await loadData();
+    closeModal();
+  } catch (err) {
+    setFormError(err?.response?.data?.message || err?.message || 'Failed to save product.');
+  } finally {
+    setSaving(false);
+  }
+};
 
   // ── Delete / Featured toggle ──────────────────────────────────────────────
   const handleDelete = async (id, title) => {
@@ -463,13 +458,13 @@ const AdminProducts = () => {
               {/* Stock + Featured */}
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1.25rem' }}>
                 <div>
-                  <label style={labelStyle}>Stock Quantity</label>
-                  <input name="stock" type="number" value={form.stock} onChange={handleChange}
-                    placeholder="e.g. 10" min="0" style={inputStyle} />
-                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
-                    0 = Out of stock · 1–5 = Low stock · 6+ = In stock
-                  </p>
-                </div>
+  <label style={labelStyle}>Stock Status</label>
+  <select name="stockStatus" value={form.stockStatus} onChange={handleChange} style={inputStyle}>
+    <option value="in_stock">In Stock</option>
+    <option value="low_stock">Low Stock</option>
+    <option value="out_of_stock">Out of Stock</option>
+  </select>
+</div>
                 <div style={{ display:'flex', alignItems:'center', paddingTop:'1.6rem' }}>
                   <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
                     <div style={{ position:'relative' }}>
