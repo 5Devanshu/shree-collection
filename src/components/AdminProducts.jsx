@@ -1,464 +1,480 @@
-import React, { useState, useRef } from 'react';
-import { useStore }    from '../context/StoreContext';
-import { uploadImage, fetchProductById } from '../api/client';
-import Modal from './Modal';
-import './Modal.css';
+import React, { useState, useEffect, useCallback } from 'react';
+import {
+  fetchProducts,
+  fetchCategories,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+  uploadImage,
+} from '../api/client';
 
-const emptyForm = () => ({
-  title: '', material: '', price: '', image: '',
-  gallery: [],
-  categorySlug: '', description: '', stock: '',
-  featured: false,
-  details: [{ label: '', value: '' }],
-});
-
-const StockBadge = ({ stock }) => {
-  if (stock > 5) return <span className="status-badge status-delivered">In Stock</span>;
-  if (stock > 0) return <span className="status-badge status-shipped">Low Stock</span>;
-  return <span className="status-badge status-pending">Out of Stock</span>;
+// ── Empty form template ───────────────────────────────────────────────────────
+const EMPTY_FORM = {
+  title:       '',
+  material:    '',
+  category:    '',
+  price:       '',
+  stock:       '',
+  description: '',
+  isFeatured:  false,
+  image:       '',           // Cloudinary URL after upload
+  gallery:     [],           // Array of Cloudinary URLs
+  specifications: [],        // ← MUST be [] not undefined
 };
 
-const ProductForm = ({ initial, categories, onSave, onCancel }) => {
-  const [form,      setForm]      = useState(() => initial || emptyForm());
-  const [imgError,  setImgError]  = useState(false);
-  const [status,    setStatus]    = useState('');    // upload status message
-  const [busy,      setBusy]      = useState(false); // any upload in progress
+const AdminProducts = () => {
+  const [products,   setProducts]   = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading,    setLoading]    = useState(true);
+  const [error,      setError]      = useState('');
 
-  // Use a ref as the authoritative gallery list — avoids stale closure issues
-  const galleryRef = useRef(initial?.gallery || []);
+  // Modal state
+  const [showModal,    setShowModal]    = useState(false);
+  const [editingId,    setEditingId]    = useState(null);
+  const [form,         setForm]         = useState(EMPTY_FORM);
+  const [formError,    setFormError]    = useState('');
+  const [saving,       setSaving]       = useState(false);
 
-  const set = (field, val) => setForm(prev => ({ ...prev, [field]: val }));
+  // Upload state
+  const [imageUploading,   setImageUploading]   = useState(false);
+  const [galleryUploading, setGalleryUploading] = useState(false);
 
-  const setDetail = (i, key, val) =>
-    setForm(prev => {
-      const details = [...prev.details];
-      details[i] = { ...details[i], [key]: val };
-      return { ...prev, details };
-    });
-
-  const addDetail    = () => setForm(prev => ({ ...prev, details: [...prev.details, { label: '', value: '' }] }));
-  const removeDetail = (i) => setForm(prev => ({ ...prev, details: prev.details.filter((_, idx) => idx !== i) }));
-
-  // ── Main image ──────────────────────────────────────────────────────────────
-  const handleMainImage = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    // Instant local preview
-    const reader = new FileReader();
-    reader.onload = ev => { setImgError(false); set('image', ev.target.result); };
-    reader.readAsDataURL(file);
-
-    setBusy(true);
-    setStatus('Uploading main image…');
+  // ── Load products & categories ──────────────────────────────────────────────
+  const loadData = useCallback(async () => {
+    setLoading(true);
     try {
-      const fd = new FormData();
-      fd.append('image', file);
-      const res = await uploadImage(fd);
-      set('image', res.data.media.secureUrl);
-      setStatus('✓ Main image uploaded');
-      setTimeout(() => setStatus(''), 2000);
+      const [prodRes, catRes] = await Promise.all([
+        fetchProducts({ limit: 100 }),
+        fetchCategories(),
+      ]);
+      const prods = prodRes.data?.products || prodRes.data?.data || [];
+      const cats  = catRes.data?.data      || catRes.data?.categories || catRes.data || [];
+      setProducts(Array.isArray(prods) ? prods : []);
+      setCategories(Array.isArray(cats) ? cats : []);
     } catch (err) {
-      setStatus(`✗ ${err.message}`);
+      setError('Failed to load products.');
     } finally {
-      setBusy(false);
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Open modal ──────────────────────────────────────────────────────────────
+  const openAdd = () => {
+    setForm(EMPTY_FORM);
+    setEditingId(null);
+    setFormError('');
+    setShowModal(true);
+  };
+
+  const openEdit = (product) => {
+    setForm({
+      title:          product.title       || '',
+      material:       product.material    || '',
+      category:       product.category?._id || product.category || '',
+      price:          product.price       ?? '',
+      stock:          product.stock       ?? '',
+      description:    product.description || '',
+      isFeatured:     product.isFeatured  || false,
+      image:          product.image?.url  || product.image || '',
+      gallery:        Array.isArray(product.gallery) ? product.gallery : [],
+      specifications: Array.isArray(product.specifications) ? product.specifications : [],
+    });
+    setEditingId(product._id);
+    setFormError('');
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    setEditingId(null);
+    setForm(EMPTY_FORM);
+    setFormError('');
+  };
+
+  // ── Form field change ───────────────────────────────────────────────────────
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+    setFormError('');
+  };
+
+  // ── Main image upload ───────────────────────────────────────────────────────
+  const handleImageUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImageUploading(true);
+    setFormError('');
+    try {
+      const formData = new FormData();
+      formData.append('image', file);
+      formData.append('folder', 'product');
+      const res   = await uploadImage(formData);
+      const media = res.data?.media;
+      const url   = media?.secureUrl || media?.url || '';
+      setForm(prev => ({ ...prev, image: url }));
+    } catch (err) {
+      setFormError('Image upload failed. Please try again.');
+    } finally {
+      setImageUploading(false);
     }
   };
 
-  // ── Gallery images ──────────────────────────────────────────────────────────
-  const handleGalleryFiles = async (e) => {
-    const files = Array.from(e.target.files);
+  // ── Gallery upload ──────────────────────────────────────────────────────────
+  const handleGalleryUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
     if (!files.length) return;
-
-    setBusy(true);
-    setStatus(`Uploading ${files.length} image${files.length > 1 ? 's' : ''}…`);
-
+    setGalleryUploading(true);
+    setFormError('');
     try {
-      const newUrls = await Promise.all(
-        files.map(async file => {
-          const fd = new FormData();
-          fd.append('image', file);
-          const res = await uploadImage(fd);
-          return res.data.media.secureUrl;
+      const urls = await Promise.all(
+        files.map(async (file) => {
+          const formData = new FormData();
+          formData.append('image', file);
+          formData.append('folder', 'product');
+          const res   = await uploadImage(formData);
+          const media = res.data?.media;
+          return media?.secureUrl || media?.url || '';
         })
       );
-
-      // Update both ref and state together
-      galleryRef.current = [...galleryRef.current, ...newUrls];
-      setForm(prev => ({ ...prev, gallery: [...galleryRef.current] }));
-      setStatus(`✓ ${newUrls.length} image${newUrls.length > 1 ? 's' : ''} added`);
-      setTimeout(() => setStatus(''), 2000);
-
-      // Reset file input
-      e.target.value = '';
+      setForm(prev => ({
+        ...prev,
+        gallery: [...(prev.gallery || []), ...urls.filter(Boolean)],
+      }));
     } catch (err) {
-      setStatus(`✗ Gallery upload failed: ${err.message}`);
+      setFormError('Gallery upload failed. Please try again.');
     } finally {
-      setBusy(false);
+      setGalleryUploading(false);
     }
   };
 
-  const removeGalleryImage = (i) => {
-    galleryRef.current = galleryRef.current.filter((_, idx) => idx !== i);
-    setForm(prev => ({ ...prev, gallery: [...galleryRef.current] }));
+  // ── Specifications ──────────────────────────────────────────────────────────
+  const addSpec = () => {
+    setForm(prev => ({
+      ...prev,
+      specifications: [...(prev.specifications || []), { label: '', value: '' }],
+    }));
   };
 
-  const handleSubmit = () => {
-    // Validate all required fields
-    const errors = [];
-    
-    if (!form.title.trim()) errors.push('Product name is required');
-    if (!form.price) errors.push('Price is required');
-    if (!form.categorySlug) errors.push('Category is required');
-    if (!form.image || !form.image.trim()) errors.push('Product image is required');
-    if (!form.description || !form.description.trim()) errors.push('Product description is required');
-    if (!form.material || !form.material.trim()) errors.push('Material is required');
-    
-    if (errors.length > 0) {
-      alert('Please fill in all required fields:\n\n' + errors.join('\n'));
-      return;
-    }
-
-    // Always read gallery from ref — guaranteed to be current
-    const galleryToSave = [...galleryRef.current];
-
-    console.log('Submitting with gallery:', galleryToSave);
-
-    onSave({
-      ...form,
-      price:   parseFloat(form.price)   || 0,
-      stock:   parseInt(form.stock, 10) || 0,
-      gallery: galleryToSave,
-      details: form.details.filter(d => d.label.trim() && d.value.trim()),
+  const updateSpec = (index, field, val) => {
+    setForm(prev => {
+      const specs = [...(prev.specifications || [])];
+      specs[index] = { ...specs[index], [field]: val };
+      return { ...prev, specifications: specs };
     });
   };
 
-  return (
-    <div className="modal-form">
-
-      {/* Status message */}
-      {status && (
-        <div style={{
-          padding: '8px 14px',
-          background: status.startsWith('✓') ? 'rgba(115,92,0,0.08)' : status.startsWith('✗') ? 'rgba(186,26,26,0.06)' : 'var(--surface-container-low)',
-          border: `1px solid ${status.startsWith('✓') ? 'var(--primary)' : status.startsWith('✗') ? 'rgba(186,26,26,0.3)' : 'var(--outline-variant)'}`,
-          color: status.startsWith('✓') ? 'var(--primary)' : status.startsWith('✗') ? 'var(--on-error)' : 'var(--on-surface)',
-          fontSize: '0.82rem', fontFamily: 'var(--font-sans)',
-        }}>
-          {status}
-        </div>
-      )}
-
-      {/* ── Main image ─────────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>Product Image (Main) *</label>
-        <div className="form-image-preview">
-          {form.image && !imgError
-            ? <img src={form.image} alt="main" onError={() => setImgError(true)} />
-            : <span className="placeholder-text">No image — upload below or paste URL</span>
-          }
-        </div>
-        <input
-          type="text"
-          placeholder="Paste image URL…"
-          value={!form.image?.startsWith('data:') ? (form.image || '') : ''}
-          onChange={e => { setImgError(false); set('image', e.target.value); }}
-        />
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          className="form-file-input"
-          onChange={handleMainImage}
-          disabled={busy}
-        />
-      </div>
-
-      {/* ── Gallery images ─────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>Gallery Images (Swipe on product page)</label>
-
-        {/* Thumbnails of already-added gallery images */}
-        {form.gallery?.length > 0 && (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 10 }}>
-            {form.gallery.map((url, i) => (
-              <div key={`${url}-${i}`} style={{ position: 'relative', width: 70, height: 70, flexShrink: 0 }}>
-                <img src={url} alt={`gallery ${i + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover', border: '1px solid var(--outline-variant)', display: 'block' }} />
-                <button
-                  type="button"
-                  onClick={() => removeGalleryImage(i)}
-                  style={{
-                    position: 'absolute', top: -7, right: -7,
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: 'var(--on-error)', color: '#fff',
-                    border: '2px solid #fff', cursor: 'pointer',
-                    fontSize: '0.6rem', fontWeight: 700,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    lineHeight: 1,
-                  }}
-                >✕</button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        <input
-          type="file"
-          accept="image/jpeg,image/png,image/webp"
-          multiple
-          className="form-file-input"
-          onChange={handleGalleryFiles}
-          disabled={busy}
-        />
-        <span className="form-hint">
-          {form.gallery?.length > 0
-            ? `${form.gallery.length} image${form.gallery.length > 1 ? 's' : ''} in gallery — customers swipe through these`
-            : 'Select multiple files at once for a swipeable gallery'
-          }
-        </span>
-      </div>
-
-      {/* ── Name + Material ─────────────────────────────────────────────────── */}
-      <div className="form-row">
-        <div className="form-field">
-          <label>Product Name *</label>
-          <input type="text" placeholder="e.g. Lumina Diamond Ring"
-            value={form.title} onChange={e => set('title', e.target.value)} />
-        </div>
-        <div className="form-field">
-          <label>Material *</label>
-          <input type="text" placeholder="e.g. 18K YELLOW GOLD"
-            value={form.material} onChange={e => set('material', e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Category + Price ─────────────────────────────────────────────────── */}
-      <div className="form-row">
-        <div className="form-field">
-          <label>Category *</label>
-          <select value={form.categorySlug} onChange={e => set('categorySlug', e.target.value)}>
-            <option value="">Select category…</option>
-            {Array.isArray(categories) && categories.map(c => <option key={c._id} value={c.slug}>{c.name}</option>)}
-          </select>
-        </div>
-        <div className="form-field">
-          <label>Price (₹) *</label>
-          <input type="number" min="0" placeholder="e.g. 4200"
-            value={form.price} onChange={e => set('price', e.target.value)} />
-        </div>
-      </div>
-
-      {/* ── Stock + Featured ─────────────────────────────────────────────────── */}
-      <div className="form-row">
-        <div className="form-field">
-          <label>Stock Quantity</label>
-          <input type="number" min="0" placeholder="e.g. 10"
-            value={form.stock} onChange={e => set('stock', e.target.value)} />
-        </div>
-        <div className="form-field" style={{ justifyContent: 'flex-end' }}>
-          <div className="form-checkbox-row" style={{ paddingBottom: 8 }}>
-            <input type="checkbox" id="featured" checked={form.featured}
-              onChange={e => set('featured', e.target.checked)} />
-            <label htmlFor="featured">Feature on homepage</label>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Description ──────────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>Description *</label>
-        <textarea rows={3} placeholder="Describe the piece…"
-          value={form.description} onChange={e => set('description', e.target.value)} />
-      </div>
-
-      {/* ── Specifications ───────────────────────────────────────────────────── */}
-      <div className="form-field">
-        <label>Product Specifications</label>
-        <div className="detail-pairs">
-          {form.details.map((d, i) => (
-            <div className="detail-pair" key={i}>
-              <div className="form-field" style={{ margin: 0 }}>
-                <input type="text" placeholder="Label (e.g. Metal)"
-                  value={d.label} onChange={e => setDetail(i, 'label', e.target.value)} />
-              </div>
-              <div className="form-field" style={{ margin: 0 }}>
-                <input type="text" placeholder="Value (e.g. Platinum)"
-                  value={d.value} onChange={e => setDetail(i, 'value', e.target.value)} />
-              </div>
-              <button className="detail-pair-remove" type="button" onClick={() => removeDetail(i)}>✕</button>
-            </div>
-          ))}
-        </div>
-        <button className="add-detail-btn" type="button" onClick={addDetail}>+ Add Specification</button>
-      </div>
-
-      <div className="modal-actions">
-        <button type="button" className="btn btn-secondary" onClick={onCancel}>Cancel</button>
-        <button type="button" className="btn btn-primary" onClick={handleSubmit} disabled={busy}>
-          {busy ? 'Uploading…' : 'Save Product'}
-        </button>
-      </div>
-    </div>
-  );
-};
-
-// ── Main AdminProducts ─────────────────────────────────────────────────────────
-const AdminProducts = () => {
-  const { products, categories, addProduct, updateProduct, deleteProduct } = useStore();
-  const [modal,     setModal]     = useState(null);
-  const [editing,   setEditing]   = useState(null);
-  const [search,    setSearch]    = useState('');
-  const [filterCat, setFilterCat] = useState('');
-  const [error,     setError]     = useState('');
-  const [saving,    setSaving]    = useState(false);
-
-  const openAdd = () => { setEditing(null); setModal('add'); };
-
-  const openEdit = async (p) => {
-    // Always fetch fresh so gallery is current from MongoDB
-    try {
-      const res = await fetchProductById(p._id);
-      // API returns { success: true, product: {...} }
-      const fresh = res.data?.product || res.data?.data || res.data;
-      setEditing({ ...fresh, gallery: Array.isArray(fresh.gallery) ? fresh.gallery : [] });
-    } catch {
-      setEditing({ ...p, gallery: Array.isArray(p.gallery) ? p.gallery : [] });
-    }
-    setModal('edit');
+  const removeSpec = (index) => {
+    setForm(prev => ({
+      ...prev,
+      specifications: (prev.specifications || []).filter((_, i) => i !== index),
+    }));
   };
 
-  const closeModal = () => { setModal(null); setEditing(null); setError(''); };
+  // ── Save product ────────────────────────────────────────────────────────────
+  const handleSave = async () => {
+    setFormError('');
 
-  const handleSave = async (data) => {
-    setSaving(true); setError('');
-    console.log('Saving product with gallery:', data.gallery);
+    // Validate required fields
+    if (!form.title.trim())    return setFormError('Product name is required.');
+    if (!form.material.trim()) return setFormError('Material is required.');
+    if (!form.category)        return setFormError('Please select a category.');
+    if (!form.price)           return setFormError('Price is required.');
+    if (!form.image)           return setFormError('Please upload a product image.');
+    if (!form.description.trim()) return setFormError('Description is required.');
+
+    setSaving(true);
     try {
-      if (modal === 'add') await addProduct(data);
-      else await updateProduct(editing._id, data);
+      // ✅ specifications is always an array — .filter() is safe
+      const payload = {
+        title:          form.title.trim(),
+        material:       form.material.trim(),
+        category:       form.category,
+        price:          Number(form.price),
+        stock:          Number(form.stock) || 0,
+        description:    form.description.trim(),
+        isFeatured:     form.isFeatured,
+        image:          form.image,
+        gallery:        Array.isArray(form.gallery) ? form.gallery : [],
+        specifications: (form.specifications || []).filter(s => s.label && s.value),
+      };
+
+      if (editingId) {
+        await updateProduct(editingId, payload);
+      } else {
+        await createProduct(payload);
+      }
+
+      await loadData();
       closeModal();
     } catch (err) {
-      setError(err.message);
+      setFormError(err?.response?.data?.message || err?.message || 'Failed to save product.');
     } finally {
       setSaving(false);
     }
   };
 
+  // ── Delete product ──────────────────────────────────────────────────────────
   const handleDelete = async (id, title) => {
     if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
-    try { await deleteProduct(id); } catch (err) { alert(err.message); }
+    try {
+      await deleteProduct(id);
+      setProducts(prev => prev.filter(p => p._id !== id));
+    } catch (err) {
+      alert(err?.response?.data?.message || 'Failed to delete product.');
+    }
   };
 
-  const filtered = (Array.isArray(products) ? products : []).filter(p => {
-    const matchSearch = (p.title ?? '').toLowerCase().includes(search.toLowerCase());
-    const matchCat    = !filterCat || p.categorySlug === filterCat;
-    return matchSearch && matchCat;
-  });
+  // ── Toggle featured ─────────────────────────────────────────────────────────
+  const handleToggleFeatured = async (id, current) => {
+    try {
+      await updateProduct(id, { isFeatured: !current });
+      setProducts(prev =>
+        prev.map(p => p._id === id ? { ...p, isFeatured: !current } : p)
+      );
+    } catch (err) {
+      alert('Failed to update featured status.');
+    }
+  };
 
+  // ────────────────────────────────────────────────────────────────────────────
+  // RENDER
+  // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="admin-content">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-6)' }}>
-        <h2 className="headline-md">Products</h2>
-        <button className="btn btn-primary" onClick={openAdd} style={{ padding: 'var(--spacing-3) var(--spacing-6)' }}>
+
+      {/* Header */}
+      <div className="admin-page-header" style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'var(--spacing-6)' }}>
+        <h2 className="headline-md">Products Management</h2>
+        <button className="btn btn-primary" onClick={openAdd}
+          style={{ padding:'var(--spacing-3) var(--spacing-6)', borderRadius:4 }}>
           + Add Product
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 'var(--spacing-4)', marginBottom: 'var(--spacing-6)', flexWrap: 'wrap' }}>
-        <input type="text" placeholder="Search products…" value={search}
-          onChange={e => setSearch(e.target.value)}
-          style={{ flex: 1, minWidth: 200, maxWidth: 340, padding: '10px 16px', border: '1px solid var(--outline-variant)', background: '#fff', color: 'var(--on-surface)', fontFamily: 'var(--font-sans)', fontSize: '0.875rem', outline: 'none' }}
-        />
-        <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-          style={{ padding: '10px 36px 10px 16px', border: '1px solid var(--outline-variant)', background: '#fff', color: 'var(--on-surface)', fontFamily: 'var(--font-sans)', fontSize: '0.875rem', cursor: 'pointer', appearance: 'none',
-            backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%237f7663' fill='none' stroke-width='1.5'/%3E%3C/svg%3E\")",
-            backgroundRepeat: 'no-repeat', backgroundPosition: 'right 12px center' }}
-        >
-          <option value="">All Categories</option>
-          {Array.isArray(categories) && categories.map(c => <option key={c._id} value={c.slug}>{c.name}</option>)}
-        </select>
-      </div>
+      {error && (
+        <p style={{ color:'#c0392b', padding:'var(--spacing-4)', background:'#fff0f0', borderRadius:4, marginBottom:'var(--spacing-4)' }}>
+          {error}
+        </p>
+      )}
 
-      <div className="recent-activity">
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th className="label-md">Image</th>
-              <th className="label-md">Product</th>
-              <th className="label-md">Category</th>
-              <th className="label-md">Price</th>
-              <th className="label-md">Stock</th>
-              <th className="label-md">Featured</th>
-              <th className="label-md">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filtered.length === 0 && (
+      {loading ? (
+        <p className="body-md" style={{ color:'var(--on-surface-variant)' }}>Loading products…</p>
+      ) : (
+        <div className="recent-activity" style={{ overflowX:'auto' }}>
+          <table className="admin-table" style={{ width:'100%' }}>
+            <thead>
               <tr>
-                <td colSpan={7} style={{ textAlign: 'center', padding: 'var(--spacing-12)', color: 'var(--on-surface-variant)' }}>
-                  No products found
-                </td>
+                <th className="label-md">Image</th>
+                <th className="label-md">Product Name</th>
+                <th className="label-md">Category</th>
+                <th className="label-md">Price</th>
+                <th className="label-md">Stock</th>
+                <th className="label-md">Featured</th>
+                <th className="label-md">Actions</th>
               </tr>
-            )}
-            {filtered.map(p => {
-              const cat = categories.find(c => c.slug === p.categorySlug);
-              return (
-                <tr key={p._id}>
-                  <td>
-                    <div style={{ width: 48, height: 48, background: 'var(--surface-container-low)', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                      {p.image
-                        ? <img src={p.image} alt={p.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <span style={{ fontSize: '1.2rem' }}>💎</span>
-                      }
-                      {p.gallery?.length > 0 && (
-                        <div style={{ position: 'absolute', bottom: 0, right: 0, background: 'var(--primary)', color: '#fff', fontSize: '0.55rem', fontWeight: 700, padding: '1px 4px', fontFamily: 'var(--font-sans)' }}>
-                          +{p.gallery.length}
-                        </div>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <div className="body-lg" style={{ fontWeight: 500, marginBottom: 2 }}>{p.title}</div>
-                    {p.material && <div style={{ fontSize: '0.72rem', color: 'var(--on-surface-variant)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{p.material}</div>}
-                    {p.discountEnabled && <div style={{ fontSize: '0.72rem', color: 'var(--primary)', fontWeight: 600, marginTop: 2 }}>{p.discountPercent}% OFF</div>}
-                  </td>
-                  <td className="body-lg">{cat?.name || p.categorySlug || '—'}</td>
-                  <td>
-                    <div className="body-lg">₹{Number(p.price).toLocaleString('en-IN')}</div>
-                    {p.discountEnabled && <div style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 500 }}>₹{Number(p.discountedPrice).toLocaleString('en-IN')}</div>}
-                  </td>
-                  <td><StockBadge stock={p.stock} /></td>
-                  <td>
-                    <span style={{ fontSize: '1.1rem', color: p.featured ? 'var(--primary)' : 'var(--outline-variant)' }}>
-                      {p.featured ? '★' : '☆'}
-                    </span>
-                  </td>
-                  <td>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      <button className="btn btn-tertiary" onClick={() => openEdit(p)}>Edit</button>
-                      <button className="btn btn-tertiary" onClick={() => handleDelete(p._id, p.title)} style={{ color: 'var(--on-error)' }}>Delete</button>
-                    </div>
+            </thead>
+            <tbody>
+              {products.length === 0 ? (
+                <tr>
+                  <td colSpan={7} style={{ textAlign:'center', padding:'var(--spacing-8)', color:'var(--on-surface-variant)' }}>
+                    No products yet. Click "+ Add Product" to get started.
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+              ) : (
+                products.map(product => (
+                  <tr key={product._id}>
+                    <td>
+                      {product.image?.url || product.image ? (
+                        <img
+                          src={product.image?.url || product.image}
+                          alt={product.title}
+                          style={{ width:48, height:48, objectFit:'cover', borderRadius:4 }}
+                        />
+                      ) : (
+                        <div style={{ width:48, height:48, background:'var(--surface-container-high)', borderRadius:4 }} />
+                      )}
+                    </td>
+                    <td className="body-md">{product.title}</td>
+                    <td className="body-md">{product.category?.name || '—'}</td>
+                    <td className="body-md">₹{(product.price || 0).toLocaleString('en-IN')}</td>
+                    <td>
+                      <span className={`status-badge ${
+                        product.stockStatus === 'in_stock'    ? 'status-delivered' :
+                        product.stockStatus === 'low_stock'   ? 'status-shipped'   :
+                        'status-pending'
+                      }`}>
+                        {product.stockStatus === 'in_stock'  ? 'In Stock'    :
+                         product.stockStatus === 'low_stock' ? 'Low Stock'   : 'Out of Stock'}
+                      </span>
+                    </td>
+                    <td style={{ textAlign:'center' }}>
+                      <button
+                        onClick={() => handleToggleFeatured(product._id, product.isFeatured)}
+                        style={{ background:'none', border:'none', cursor:'pointer', fontSize:'1.2rem' }}
+                        title={product.isFeatured ? 'Remove from featured' : 'Add to featured'}
+                      >
+                        {product.isFeatured ? '★' : '☆'}
+                      </button>
+                    </td>
+                    <td style={{ display:'flex', gap:8 }}>
+                      <button className="btn btn-tertiary" onClick={() => openEdit(product)}
+                        style={{ fontSize:'0.8rem' }}>Edit</button>
+                      <button className="btn btn-tertiary" onClick={() => handleDelete(product._id, product.title)}
+                        style={{ fontSize:'0.8rem', color:'#c0392b' }}>Delete</button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <Modal isOpen={!!modal} onClose={closeModal}
-        title={modal === 'add' ? 'Add New Product' : 'Edit Product'} size="lg">
-        {error && (
-          <div style={{ background: 'rgba(186,26,26,0.06)', border: '1px solid rgba(186,26,26,0.2)', color: 'var(--on-error)', padding: 'var(--spacing-4)', marginBottom: 'var(--spacing-4)', fontSize: '0.875rem' }}>
-            {error}
+      {/* ── Add / Edit Modal ──────────────────────────────────────────────────── */}
+      {showModal && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.55)',
+          display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000,
+        }}>
+          <div style={{
+            background:'var(--surface)', borderRadius:8, padding:'2rem',
+            width:'90%', maxWidth:680, maxHeight:'90vh', overflowY:'auto',
+          }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
+              <h3 className="headline-sm">{editingId ? 'Edit Product' : 'Add New Product'}</h3>
+              <button onClick={closeModal} style={{ background:'none', border:'none', fontSize:'1.5rem', cursor:'pointer' }}>✕</button>
+            </div>
+
+            {formError && (
+              <div style={{ background:'#fff0f0', border:'1px solid #ffcccc', color:'#c0392b', padding:'0.75rem 1rem', borderRadius:4, marginBottom:'1.25rem', fontSize:'0.9rem' }}>
+                {formError}
+              </div>
+            )}
+
+            {/* Main Image */}
+            <div style={{ marginBottom:'1.25rem' }}>
+              <label className="label-md" style={{ display:'block', marginBottom:'0.5rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                Product Image (Main) *
+              </label>
+              {form.image && (
+                <img src={form.image} alt="Preview" style={{ width:'100%', maxHeight:220, objectFit:'contain', marginBottom:'0.5rem', borderRadius:4 }} />
+              )}
+              <input type="file" accept="image/*" onChange={handleImageUpload} disabled={imageUploading} />
+              {imageUploading && <p className="body-md" style={{ color:'var(--on-surface-variant)', marginTop:4 }}>Uploading…</p>}
+            </div>
+
+            {/* Gallery Images */}
+            <div style={{ marginBottom:'1.25rem' }}>
+              <label className="label-md" style={{ display:'block', marginBottom:'0.5rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>
+                Gallery Images (swipe on product page)
+              </label>
+              <input type="file" accept="image/*" multiple onChange={handleGalleryUpload} disabled={galleryUploading} />
+              {galleryUploading && <p className="body-md" style={{ color:'var(--on-surface-variant)', marginTop:4 }}>Uploading gallery…</p>}
+              {form.gallery?.length > 0 && (
+                <div style={{ display:'flex', gap:8, flexWrap:'wrap', marginTop:8 }}>
+                  {form.gallery.map((url, i) => (
+                    <div key={i} style={{ position:'relative' }}>
+                      <img src={url} alt="" style={{ width:60, height:60, objectFit:'cover', borderRadius:4 }} />
+                      <button
+                        onClick={() => setForm(prev => ({ ...prev, gallery: prev.gallery.filter((_, gi) => gi !== i) }))}
+                        style={{ position:'absolute', top:-6, right:-6, background:'#c0392b', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, cursor:'pointer', fontSize:'0.7rem', lineHeight:'18px', textAlign:'center' }}
+                      >✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="label-sm" style={{ color:'var(--on-surface-variant)', marginTop:4 }}>Select multiple files at once for a swipeable gallery</p>
+            </div>
+
+            {/* Name + Material */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1.25rem' }}>
+              <div>
+                <label className="label-md" style={{ display:'block', marginBottom:'0.4rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Product Name *</label>
+                <input name="title" value={form.title} onChange={handleChange} placeholder="e.g. Gold Bangle Set"
+                  className="checkout-input" style={{ width:'100%' }} />
+              </div>
+              <div>
+                <label className="label-md" style={{ display:'block', marginBottom:'0.4rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Material *</label>
+                <input name="material" value={form.material} onChange={handleChange} placeholder="e.g. Yellow Gold"
+                  className="checkout-input" style={{ width:'100%' }} />
+              </div>
+            </div>
+
+            {/* Category + Price */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1.25rem' }}>
+              <div>
+                <label className="label-md" style={{ display:'block', marginBottom:'0.4rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Category *</label>
+                <select name="category" value={form.category} onChange={handleChange}
+                  className="checkout-input" style={{ width:'100%' }}>
+                  <option value="">Select category</option>
+                  {categories.map(c => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="label-md" style={{ display:'block', marginBottom:'0.4rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Price (₹) *</label>
+                <input name="price" type="number" value={form.price} onChange={handleChange} placeholder="e.g. 4200" min="0"
+                  className="checkout-input" style={{ width:'100%' }} />
+              </div>
+            </div>
+
+            {/* Stock + Featured */}
+            <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1rem', marginBottom:'1.25rem' }}>
+              <div>
+                <label className="label-md" style={{ display:'block', marginBottom:'0.4rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Stock Quantity</label>
+                <input name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="e.g. 10" min="0"
+                  className="checkout-input" style={{ width:'100%' }} />
+              </div>
+              <div style={{ display:'flex', alignItems:'center', gap:8, paddingTop:'1.5rem' }}>
+                <input type="checkbox" name="isFeatured" id="isFeatured" checked={form.isFeatured} onChange={handleChange} />
+                <label htmlFor="isFeatured" className="body-md">Feature on homepage</label>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div style={{ marginBottom:'1.25rem' }}>
+              <label className="label-md" style={{ display:'block', marginBottom:'0.4rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Description *</label>
+              <textarea name="description" value={form.description} onChange={handleChange}
+                placeholder="Describe the product…" rows={4}
+                className="checkout-input" style={{ width:'100%', resize:'vertical' }} />
+            </div>
+
+            {/* Specifications */}
+            <div style={{ marginBottom:'1.5rem' }}>
+              <label className="label-md" style={{ display:'block', marginBottom:'0.5rem', textTransform:'uppercase', letterSpacing:'0.05em' }}>Product Specifications</label>
+              {(form.specifications || []).map((spec, i) => (
+                <div key={i} style={{ display:'grid', gridTemplateColumns:'1fr 1fr auto', gap:8, marginBottom:8 }}>
+                  <input value={spec.label} onChange={e => updateSpec(i, 'label', e.target.value)}
+                    placeholder="Label (e.g. Metal)" className="checkout-input" />
+                  <input value={spec.value} onChange={e => updateSpec(i, 'value', e.target.value)}
+                    placeholder="Value (e.g. Platinum)" className="checkout-input" />
+                  <button onClick={() => removeSpec(i)}
+                    style={{ background:'none', border:'1px solid #ddd', borderRadius:4, cursor:'pointer', padding:'0 0.5rem', color:'#c0392b' }}>✕</button>
+                </div>
+              ))}
+              <button onClick={addSpec}
+                style={{ background:'none', border:'1px dashed var(--on-surface-variant)', borderRadius:4, padding:'0.4rem 1rem', cursor:'pointer', fontSize:'0.85rem', color:'var(--on-surface-variant)' }}>
+                + Add Specification
+              </button>
+            </div>
+
+            {/* Actions */}
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'1rem', paddingTop:'1rem', borderTop:'1px solid var(--surface-container-highest)' }}>
+              <button className="btn btn-secondary" onClick={closeModal} disabled={saving}
+                style={{ padding:'0.75rem 2rem' }}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={saving || imageUploading}
+                style={{ padding:'0.75rem 2.5rem' }}>
+                {saving ? 'Saving…' : editingId ? 'Update Product' : 'Save Product'}
+              </button>
+            </div>
           </div>
-        )}
-        <ProductForm
-          key={editing?._id || 'new'}  // forces full remount when switching products
-          initial={editing}
-          categories={categories}
-          onSave={handleSave}
-          onCancel={closeModal}
-        />
-      </Modal>
+        </div>
+      )}
     </div>
   );
 };
