@@ -5,10 +5,14 @@ const CustomerContext = createContext(null);
 
 const API = import.meta.env.VITE_API_URL || '/api';
 
+// ── Single axios client — token key is consistent everywhere ─────────────────
+const TOKEN_KEY    = 'shree_customer_token';
+const DATA_KEY     = 'shree_customer_data';
+
 const client = axios.create({ baseURL: API });
 
 client.interceptors.request.use((config) => {
-  const token = localStorage.getItem('customerToken');
+  const token = localStorage.getItem(TOKEN_KEY); // ✅ correct key
   if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
@@ -17,11 +21,10 @@ client.interceptors.response.use(
   (res) => res,
   (err) => {
     if (import.meta.env.DEV) {
-      console.error('❌ API Error:', {
+      console.error('❌ CustomerContext API Error:', {
         status:  err.response?.status,
         url:     err.config?.url,
         message: err.response?.data?.message,
-        data:    err.response?.data,
       });
     }
     return Promise.reject(err);
@@ -32,80 +35,88 @@ export const CustomerProvider = ({ children }) => {
   const [customer, setCustomer] = useState(null);
   const [loading,  setLoading]  = useState(true);
 
-// ── Restore session on mount ─────────────────────────────────────────────────
-useEffect(() => {
-  const token    = localStorage.getItem('shree_customer_token');  // ← correct key
-  const stored   = localStorage.getItem('shree_customer_data');   // ← correct key
+  // ── Restore session on mount ───────────────────────────────────────────────
+  useEffect(() => {
+    const token  = localStorage.getItem(TOKEN_KEY);
+    const stored = localStorage.getItem(DATA_KEY);
 
-  if (token && stored) {
-    try {
-      setCustomer(JSON.parse(stored));
-    } catch {
-      localStorage.removeItem('shree_customer_token');
-      localStorage.removeItem('shree_customer_data');
+    if (!token) { setLoading(false); return; }
+
+    // If we have stored data, show it immediately (no flash)
+    if (stored) {
+      try { setCustomer(JSON.parse(stored)); } catch { /* ignore */ }
     }
-  }
-  setLoading(false);
-}, []);
 
-  // ── Login ──────────────────────────────────────────────────────────────────
-  // ✅ /api/customer-auth/login  (matches server.js: app.use('/api/customer-auth', customerAuthRoutes))
-// ── Login ────────────────────────────────────────────────────────────────────
-const login = useCallback(async (email, password) => {
-  const res = await client.post('/customer-auth/login', { email, password });
-  const { token, customer: userData } = res.data;
+    // Then verify token is still valid with the server
+    client.get('/customers/me')
+      .then(res => {
+        const data = res.data?.data || res.data?.customer || res.data;
+        setCustomer(data);
+        localStorage.setItem(DATA_KEY, JSON.stringify(data));
+      })
+      .catch(() => {
+        // Token expired — clear everything
+        localStorage.removeItem(TOKEN_KEY);
+        localStorage.removeItem(DATA_KEY);
+        setCustomer(null);
+      })
+      .finally(() => setLoading(false));
+  }, []);
 
-  localStorage.setItem('shree_customer_token', token);           // ← correct key
-  localStorage.setItem('shree_customer_data',  JSON.stringify(userData)); // ← correct key
-  setCustomer(userData);
-  return res.data;
-}, []);
-
-// ── Logout ───────────────────────────────────────────────────────────────────
-const logout = useCallback(() => {
-  localStorage.removeItem('shree_customer_token');               // ← correct key
-  localStorage.removeItem('shree_customer_data');                // ← correct key
-  setCustomer(null);
-}, []);
-
-  // ── Register ───────────────────────────────────────────────────────────────
-  // ✅ /api/customer-auth/register
-  const register = useCallback(async (name, email, password, phone) => {
-    const res = await client.post('/customer-auth/register', { name, email, password, phone });
+  // ── Login ─────────────────────────────────────────────────────────────────
+  const login = useCallback(async (email, password) => {
+    const res = await client.post('/customers/login', { email, password }); // ✅ correct path
     const { token, customer: userData } = res.data;
-    localStorage.setItem('customerToken', token);
-    localStorage.setItem('customerData',  JSON.stringify(userData));
+
+    localStorage.setItem(TOKEN_KEY, token);                       // ✅ correct key
+    localStorage.setItem(DATA_KEY,  JSON.stringify(userData));    // ✅ correct key
     setCustomer(userData);
     return res.data;
   }, []);
 
+  // ── Register ───────────────────────────────────────────────────────────────
+  const register = useCallback(async (name, email, password, phone) => {
+    const res = await client.post('/customers/register', { name, email, password, phone }); // ✅
+    const { token, customer: userData } = res.data;
 
+    localStorage.setItem(TOKEN_KEY, token);                       // ✅ correct key
+    localStorage.setItem(DATA_KEY,  JSON.stringify(userData));    // ✅ correct key
+    setCustomer(userData);
+    return res.data;
+  }, []);
 
-  // ── Profile (read/update) ──────────────────────────────────────────────────
-  // ✅ /api/customers/me  (matches server.js: app.use('/api/customers', customerRoutes))
+  // ── Logout ─────────────────────────────────────────────────────────────────
+  const logout = useCallback(() => {
+    localStorage.removeItem(TOKEN_KEY);   // ✅ correct key
+    localStorage.removeItem(DATA_KEY);    // ✅ correct key
+    setCustomer(null);
+  }, []);
+
+  // ── Fetch Profile ──────────────────────────────────────────────────────────
   const fetchProfile = useCallback(async () => {
     const res      = await client.get('/customers/me');
-    const userData = res.data.data || res.data.customer;
+    const userData = res.data?.data || res.data?.customer || res.data;
     setCustomer(userData);
-    localStorage.setItem('customerData', JSON.stringify(userData));
+    localStorage.setItem(DATA_KEY, JSON.stringify(userData));     // ✅ correct key
     return userData;
   }, []);
 
+  // ── Update Profile ─────────────────────────────────────────────────────────
   const updateProfile = useCallback(async (data) => {
     const res     = await client.put('/customers/me', data);
-    const updated = res.data.data || res.data.customer;
+    const updated = res.data?.data || res.data?.customer || res.data;
     setCustomer(updated);
-    localStorage.setItem('customerData', JSON.stringify(updated));
+    localStorage.setItem(DATA_KEY, JSON.stringify(updated));      // ✅ correct key
     return updated;
   }, []);
 
-  // ── Password ───────────────────────────────────────────────────────────────
+  // ── Change Password ────────────────────────────────────────────────────────
   const changePassword = useCallback(async (currentPassword, newPassword) => {
     const res = await client.put('/customers/me/change-password', { currentPassword, newPassword });
     return res.data;
   }, []);
 
-  // ── Addresses ─────────────────────────────────────────────────────────────
+  // ── Addresses ──────────────────────────────────────────────────────────────
   const addAddress = useCallback(async (addressData) => {
     const res = await client.post('/customers/me/addresses', addressData);
     await fetchProfile();
