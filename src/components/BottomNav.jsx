@@ -5,9 +5,8 @@ import { useCustomer } from '../context/CustomerContext';
 import './BottomNav.css';
 
 const BottomNav = () => {
-  const { cart }     = useStore();
-  const { customer } = useCustomer();
-  const cartCount    = cart?.reduce((s, i) => s + (i.quantity || 1), 0) || 0;
+  const { cartCount } = useStore();         // ✅ already a number from context
+  const { customer }  = useCustomer();
 
   return (
     <nav className="bottom-nav" aria-label="Mobile navigation">
@@ -27,7 +26,6 @@ const BottomNav = () => {
         <span>Wishlist</span>
       </NavLink>
 
-      {/* Centre — Search */}
       <NavLink to="/search" className={({ isActive }) => `bnav-item bnav-center${isActive ? ' bnav-active' : ''}`}>
         <div className="bnav-center-btn">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none"
@@ -44,7 +42,9 @@ const BottomNav = () => {
             stroke="currentColor" strokeWidth="2" strokeLinecap="round">
             <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/>
           </svg>
-          {cartCount > 0 && <span className="bnav-badge">{cartCount}</span>}
+          {cartCount > 0 && (
+            <span className="bnav-badge">{cartCount > 99 ? '99+' : cartCount}</span>
+          )}
         </div>
         <span>Cart</span>
       </NavLink>

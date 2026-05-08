@@ -6,9 +6,8 @@ import './MobileHeader.css';
 
 const MobileHeader = ({ showBack = false, showCart = false }) => {
   const navigate          = useNavigate();
-  const { cart }          = useStore();
+  const { cartCount }     = useStore();         // ✅ already a number
   const { customer }      = useCustomer();
-  const cartCount         = cart?.reduce((s, i) => s + (i.quantity || 1), 0) || 0;
   const firstName         = customer?.name?.split(' ')[0] || 'there';
 
   return (
@@ -25,7 +24,9 @@ const MobileHeader = ({ showBack = false, showCart = false }) => {
         ) : (
           <div className="mh-welcome">
             <span className="mh-welcome-sub">Welcome back,</span>
-            <span className="mh-welcome-name">{customer ? `${firstName}!` : 'Guest!'}</span>
+            <span className="mh-welcome-name">
+              {customer ? `${firstName}!` : 'Guest!'}
+            </span>
           </div>
         )}
       </div>
@@ -40,14 +41,16 @@ const MobileHeader = ({ showBack = false, showCart = false }) => {
           </svg>
         </Link>
 
-        {/* Cart (shown on product page) or Notification (on home) */}
+        {/* Cart (product page) or Notification bell (home) */}
         {showCart ? (
           <Link to="/checkout" className="mh-icon-btn mh-cart-btn" aria-label="Cart">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
               stroke="currentColor" strokeWidth="2" strokeLinecap="round">
               <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/>
             </svg>
-            {cartCount > 0 && <span className="mh-badge">{cartCount}</span>}
+            {cartCount > 0 && (
+              <span className="mh-badge">{cartCount > 99 ? '99+' : cartCount}</span>
+            )}
           </Link>
         ) : (
           <button className="mh-icon-btn mh-notif-btn" aria-label="Notifications">
