@@ -1,0 +1,84 @@
+/* Mobile only */
+.mobile-header { display: none; }
+
+@media (max-width: 768px) {
+  .mobile-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 60px;
+    background: var(--surface);
+    padding: 0 18px;
+    z-index: 950;
+    border-bottom: 1px solid var(--surface-container-high);
+  }
+
+  .mh-left, .mh-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .mh-welcome {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.25;
+  }
+  .mh-welcome-sub {
+    font-size: 0.68rem;
+    color: var(--on-surface-variant);
+    font-family: var(--font-sans);
+    font-weight: 400;
+  }
+  .mh-welcome-name {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--on-surface);
+    font-family: var(--font-sans);
+  }
+
+  .mh-icon-btn {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: var(--surface-container-low);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--on-surface);
+    position: relative;
+    text-decoration: none;
+    flex-shrink: 0;
+    transition: background 0.2s;
+  }
+  .mh-icon-btn:active { background: var(--surface-container-high); }
+
+  .mh-badge {
+    position: absolute;
+    top: -2px; right: -2px;
+    min-width: 18px; height: 18px;
+    border-radius: 9px;
+    background: #e53935;
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 700;
+    font-family: var(--font-sans);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 4px;
+    border: 2px solid var(--surface);
+  }
+
+  .mh-notif-dot {
+    position: absolute;
+    top: 7px; right: 7px;
+    width: 8px; height: 8px;
+    background: #e53935;
+    border-radius: 50%;
+    border: 2px solid var(--surface);
+  }
+}

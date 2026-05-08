@@ -1,29 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { useStore }    from '../context/StoreContext';
-import { fetchProductById } from '../api/client';
-import NotifyMe        from './NotifyMe';
+import { useParams, Link, useNavigate }        from 'react-router-dom';
+import { useStore }          from '../context/StoreContext';
+import { fetchProductById }  from '../api/client';
+import NotifyMe              from './NotifyMe';
 import './ProductDescription.css';
 
+const RING_SIZES = [4, 4.5, 5, 5.5, 6, 6.6, 7, 7.7, 8, 8.8];
+
 const ProductDescription = () => {
-  const { id }     = useParams();
-  const navigate   = useNavigate();
+  const { id }    = useParams();
+  const navigate  = useNavigate();
   const { addToCart, categories } = useStore();
 
-  const [product,   setProduct]   = useState(null);
-  const [loading,   setLoading]   = useState(true);
-  const [activeImg, setActiveImg] = useState(0);
+  const [product,      setProduct]      = useState(null);
+  const [loading,      setLoading]      = useState(true);
+  const [activeImg,    setActiveImg]    = useState(0);
+  const [selectedSize, setSelectedSize] = useState(5);
+  const [wished,       setWished]       = useState(false);
+  const [addedToCart,  setAddedToCart]  = useState(false);
 
-  // Swipe support
+  // Swipe refs
   const touchStartX = useRef(null);
   const touchEndX   = useRef(null);
 
-  // Fetch product directly from API by ID — always fresh from MongoDB
   useEffect(() => {
     setLoading(true);
     fetchProductById(id)
       .then(res => {
-        // Backend returns { success: true, product: {...} }
         const data = res.data?.product || res.data?.data || res.data;
         setProduct(data);
         setActiveImg(0);
@@ -32,19 +35,12 @@ const ProductDescription = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Keyboard arrow navigation - must be declared before early returns
+  // Keyboard arrow navigation
   useEffect(() => {
     if (!product || loading) return;
-    
-    const allImages = [
-      ...(product.image ? [product.image] : []),
-      ...(Array.isArray(product.gallery) ? product.gallery : []),
-      ...(Array.isArray(product.images) ? product.images : []),
-    ].filter(Boolean);
-
+    const allImages = buildImages(product);
     const prev = () => setActiveImg(i => (i - 1 + allImages.length) % allImages.length);
     const next = () => setActiveImg(i => (i + 1) % allImages.length);
-
     const handleKey = (e) => {
       if (e.key === 'ArrowLeft')  prev();
       if (e.key === 'ArrowRight') next();
@@ -53,41 +49,60 @@ const ProductDescription = () => {
     return () => window.removeEventListener('keydown', handleKey);
   }, [product, loading]);
 
+  // ── Helpers ──────────────────────────────────────────────────────────────
+  const buildImages = (p) => [
+    ...(p.image   ? [p.image]   : []),
+    ...(Array.isArray(p.gallery) ? p.gallery : []),
+    ...(Array.isArray(p.images)  ? p.images  : []),
+  ].filter(Boolean);
+
+  const handleAddToCart = () => {
+    addToCart(product);
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 2000);
+  };
+
+  const handleBuyNow = () => {
+    addToCart(product);
+    navigate('/checkout');
+  };
+
+  // ── Loading / not found ───────────────────────────────────────────────────
   if (loading) return (
-    <div className="product-description-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
-      <p className="body-lg" style={{ color: 'var(--on-surface-variant)' }}>Loading…</p>
+    <div className="pd-loading-screen">
+      <div className="pd-skeleton-img"/>
+      <div className="pd-skeleton-lines">
+        <div className="pd-skeleton-line w80"/>
+        <div className="pd-skeleton-line w50"/>
+        <div className="pd-skeleton-line w60"/>
+      </div>
     </div>
   );
 
   if (!product) return (
-    <div className="product-description-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 24, paddingTop: 80 }}>
+    <div className="pd-not-found">
       <h2 className="headline-md">Product not found</h2>
       <Link to="/" className="btn btn-secondary">Back to Home</Link>
     </div>
   );
 
-  // Build image gallery — main image + any gallery images
-  // Support both 'images' and 'gallery' field names for compatibility
-  const allImages = [
-    ...(product.image ? [product.image] : []),
-    ...(Array.isArray(product.gallery) ? product.gallery : []),
-    ...(Array.isArray(product.images) ? product.images : []),
-  ].filter(Boolean);
-
-  const hasDiscount  = product.discountEnabled && product.discountPercent > 0;
+  const allImages   = buildImages(product);
+  const hasDiscount = product.discountEnabled && product.discountPercent > 0;
   const displayPrice = hasDiscount ? product.discountedPrice : product.price;
-  const outOfStock   = product.stock === 0;
-  const category     = (Array.isArray(categories) ? categories : []).find(c => c.slug === product.categorySlug);
+  const outOfStock  = product.stock === 0;
+  const category    = (Array.isArray(categories) ? categories : []).find(c => c.slug === product.categorySlug);
+  const isRingType  = product.category?.name?.toLowerCase().includes('ring') ||
+                      category?.name?.toLowerCase().includes('ring') ||
+                      product.categorySlug?.includes('ring');
 
-  // Gallery navigation
   const prev = () => setActiveImg(i => (i - 1 + allImages.length) % allImages.length);
   const next = () => setActiveImg(i => (i + 1) % allImages.length);
 
-  // Touch swipe handlers
+  // Swipe handlers
   const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
-  const onTouchMove  = (e) => { touchEndX.current = e.touches[0].clientX; };
+  const onTouchMove  = (e) => { touchEndX.current   = e.touches[0].clientX; };
   const onTouchEnd   = () => {
-    if (touchStartX.current === null || touchEndX.current === null) return;
+    if (!touchStartX.current || !touchEndX.current) return;
     const diff = touchStartX.current - touchEndX.current;
     if (Math.abs(diff) > 50) { diff > 0 ? next() : prev(); }
     touchStartX.current = null;
@@ -96,14 +111,15 @@ const ProductDescription = () => {
 
   return (
     <div className="product-description-page">
+
+      {/* ════════════════════════════════════════════
+          DESKTOP LAYOUT
+      ════════════════════════════════════════════ */}
       <div className="product-split">
 
-        {/* ── Left — Image Gallery ─────────────────────────────────────────── */}
+        {/* Left — Image Gallery */}
         <div className="product-image-section">
-
-          {/* Main image with swipe */}
-          <div
-            className="product-main-image-wrap"
+          <div className="product-main-image-wrap"
             onTouchStart={onTouchStart}
             onTouchMove={onTouchMove}
             onTouchEnd={onTouchEnd}
@@ -119,70 +135,57 @@ const ProductDescription = () => {
               <div className="product-image-placeholder">💎</div>
             )}
 
-            {/* Discount badge */}
             {hasDiscount && (
-              <div className="product-discount-badge">
-                {product.discountPercent}% OFF
-              </div>
+              <div className="product-discount-badge">{product.discountPercent}% OFF</div>
             )}
 
-            {/* Prev / Next arrows — only show if multiple images */}
             {allImages.length > 1 && (
               <>
-                <button className="gallery-arrow gallery-arrow--prev" onClick={prev} aria-label="Previous image">
-                  ‹
-                </button>
-                <button className="gallery-arrow gallery-arrow--next" onClick={next} aria-label="Next image">
-                  ›
-                </button>
+                <button className="gallery-arrow gallery-arrow--prev" onClick={prev}>‹</button>
+                <button className="gallery-arrow gallery-arrow--next" onClick={next}>›</button>
               </>
             )}
           </div>
 
-          {/* Dot indicators */}
           {allImages.length > 1 && (
             <div className="gallery-dots">
-              {(Array.isArray(allImages) ? allImages : []).map((_, i) => (
-                <button
-                  key={i}
+              {allImages.map((_, i) => (
+                <button key={i}
                   className={`gallery-dot ${i === activeImg ? 'gallery-dot--active' : ''}`}
                   onClick={() => setActiveImg(i)}
-                  aria-label={`Image ${i + 1}`}
                 />
               ))}
             </div>
           )}
 
-          {/* Thumbnail strip */}
           {allImages.length > 1 && (
             <div className="gallery-thumbs">
-              {(Array.isArray(allImages) ? allImages : []).map((img, i) => (
-                <button
-                  key={i}
+              {allImages.map((img, i) => (
+                <button key={i}
                   className={`gallery-thumb ${i === activeImg ? 'gallery-thumb--active' : ''}`}
                   onClick={() => setActiveImg(i)}
                 >
-                  <img src={img} alt={`View ${i + 1}`} />
+                  <img src={img} alt={`View ${i + 1}`}/>
                 </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* ── Right — Product Info ─────────────────────────────────────────── */}
+        {/* Right — Product Info */}
         <div className="product-info-section">
           <div className="product-info-inner">
 
             {/* Breadcrumb */}
-            <div style={{ marginBottom: 'var(--spacing-6)', display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <Link to="/" className="label-md" style={{ color: 'var(--on-surface-variant)', textDecoration: 'none' }}>Home</Link>
-              <span style={{ color: 'var(--outline-variant)' }}>›</span>
+            <div className="pd-breadcrumb">
+              <Link to="/" className="label-md pd-crumb">Home</Link>
+              <span className="pd-crumb-sep">›</span>
               {category && (
                 <>
-                  <Link to={`/collections/${category.slug}`} className="label-md" style={{ color: 'var(--on-surface-variant)', textDecoration: 'none' }}>
+                  <Link to={`/collections/${category.slug}`} className="label-md pd-crumb">
                     {category.name}
                   </Link>
-                  <span style={{ color: 'var(--outline-variant)' }}>›</span>
+                  <span className="pd-crumb-sep">›</span>
                 </>
               )}
               <span className="label-md">{product.title}</span>
@@ -193,22 +196,22 @@ const ProductDescription = () => {
 
             {/* Price */}
             {hasDiscount ? (
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: '1rem', margin: 'var(--spacing-4) 0 var(--spacing-6)' }}>
+              <div className="pd-price-row">
                 <p className="headline-md" style={{ color: 'var(--primary)' }}>
                   ₹{Number(displayPrice).toLocaleString('en-IN')}
                 </p>
-                <p style={{ fontSize: '1.1rem', color: 'var(--on-surface-variant)', textDecoration: 'line-through' }}>
+                <p className="pd-original-price">
                   ₹{Number(product.price).toLocaleString('en-IN')}
                 </p>
               </div>
             ) : (
-              <p className="headline-md price" style={{ margin: 'var(--spacing-4) 0 var(--spacing-6)' }}>
+              <p className="headline-md price">
                 ₹{Number(product.price).toLocaleString('en-IN')}
               </p>
             )}
 
-            {/* Stock status */}
-            <div style={{ marginBottom: 'var(--spacing-6)' }}>
+            {/* Stock */}
+            <div className="pd-stock">
               {product.stock > 5
                 ? <span className="status-badge status-delivered">In Stock</span>
                 : product.stock > 0
@@ -217,15 +220,13 @@ const ProductDescription = () => {
               }
             </div>
 
-            {/* Description */}
             {product.description && (
               <p className="product-description body-lg">{product.description}</p>
             )}
 
-            {/* Spec details */}
             {product.details?.length > 0 && (
               <div className="product-details-list">
-                {(Array.isArray(product.details) ? product.details : []).map((d, i) => (
+                {product.details.map((d, i) => (
                   <div key={i} className="detail-item">
                     <span className="label-md">{d.label}</span>
                     <span className="body-lg">{d.value}</span>
@@ -237,31 +238,184 @@ const ProductDescription = () => {
             {/* Actions */}
             {!outOfStock ? (
               <div className="product-actions-large">
-                <button
-                  className="btn btn-primary"
-                  onClick={() => addToCart(product)}
-                >
-                  Add to Bag
-                </button>
-                <button
-                  className="btn btn-secondary"
-                  onClick={() => { addToCart(product); navigate('/checkout'); }}
-                >
-                  Buy Now
-                </button>
+                <button className="btn btn-primary"  onClick={handleAddToCart}>Add to Bag</button>
+                <button className="btn btn-secondary" onClick={handleBuyNow}>Buy Now</button>
               </div>
             ) : (
               <div className="product-actions-large">
-                <button className="btn btn-secondary" disabled style={{ opacity: 0.5 }}>
-                  Out of Stock
-                </button>
-                <NotifyMe productId={product._id} />
+                <button className="btn btn-secondary" disabled style={{ opacity: 0.5 }}>Out of Stock</button>
+                <NotifyMe productId={product._id}/>
               </div>
             )}
-
           </div>
         </div>
       </div>
+
+      {/* ════════════════════════════════════════════
+          MOBILE LAYOUT  (≤ 768 px)
+      ════════════════════════════════════════════ */}
+      <div className="mobile-pd">
+
+        {/* Image carousel */}
+        <div className="mpd-carousel"
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
+        >
+          {allImages.length > 0 ? (
+            <img key={activeImg} src={allImages[activeImg]} alt={product.title} className="mpd-img"/>
+          ) : (
+            <div className="mpd-placeholder">💎</div>
+          )}
+
+          {hasDiscount && (
+            <div className="product-discount-badge">{product.discountPercent}% OFF</div>
+          )}
+
+          {allImages.length > 1 && (
+            <>
+              <button className="mpd-arrow mpd-arrow-l" onClick={prev}>‹</button>
+              <button className="mpd-arrow mpd-arrow-r" onClick={next}>›</button>
+              <div className="mpd-dots">
+                {allImages.map((_, i) => (
+                  <span key={i}
+                    className={`mpd-dot ${i === activeImg ? 'mpd-dot-active' : ''}`}
+                    onClick={() => setActiveImg(i)}
+                  />
+                ))}
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* Info panel */}
+        <div className="mpd-info">
+
+          {/* Title + Tag */}
+          <div className="mpd-title-row">
+            <div>
+              <h1 className="mpd-title">{product.title}</h1>
+              {product.material && (
+                <p className="mpd-material">{product.material}</p>
+              )}
+            </div>
+            {product.isFeatured && <span className="mpd-tag">Hot</span>}
+          </div>
+
+          {/* Price */}
+          {hasDiscount ? (
+            <div className="mpd-price-row">
+              <span className="mpd-price">₹{Number(displayPrice).toLocaleString('en-IN')}</span>
+              <span className="mpd-original-price">₹{Number(product.price).toLocaleString('en-IN')}</span>
+              <span className="mpd-discount-pill">{product.discountPercent}% OFF</span>
+            </div>
+          ) : (
+            <p className="mpd-price">₹{Number(product.price).toLocaleString('en-IN')}</p>
+          )}
+
+          {/* Stock badge */}
+          <div className="mpd-stock">
+            {product.stock > 5
+              ? <span className="mpd-stock-badge in">In Stock</span>
+              : product.stock > 0
+                ? <span className="mpd-stock-badge low">Only {product.stock} left</span>
+                : <span className="mpd-stock-badge out">Out of Stock</span>
+            }
+          </div>
+
+          {/* Description */}
+          {product.description && (
+            <div className="mpd-section">
+              <h3 className="mpd-section-title">Details</h3>
+              <p className="mpd-desc">{product.description}</p>
+            </div>
+          )}
+
+          {/* Ring size selector */}
+          {(isRingType || allImages.length > 0) && (
+            <div className="mpd-section">
+              <div className="mpd-size-header">
+                <h3 className="mpd-section-title">Ring Size</h3>
+                <button className="mpd-size-guide">Size Guide</button>
+              </div>
+              <div className="mpd-size-grid">
+                {RING_SIZES.map(s => (
+                  <button
+                    key={s}
+                    className={`mpd-size-btn ${selectedSize === s ? 'active' : ''}`}
+                    onClick={() => setSelectedSize(s)}
+                  >{s}</button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Spec details */}
+          {product.details?.length > 0 && (
+            <div className="mpd-section">
+              {product.details.map((d, i) => (
+                <div key={i} className="mpd-detail-row">
+                  <span className="mpd-detail-label">{d.label}</span>
+                  <span className="mpd-detail-val">{d.value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Category detail row */}
+          {category && (
+            <div className="mpd-detail-row">
+              <span className="mpd-detail-label">Category</span>
+              <Link to={`/collections/${category.slug}`} className="mpd-detail-val mpd-cat-link">
+                {category.name}
+              </Link>
+            </div>
+          )}
+
+          {/* Spacer for fixed bottom bar */}
+          <div style={{ height: 96 }}/>
+        </div>
+
+        {/* ── Fixed bottom bar ── */}
+        <div className="mpd-bottom-bar">
+          {!outOfStock ? (
+            <>
+              <button
+                className={`mpd-wish-btn ${wished ? 'wished' : ''}`}
+                onClick={() => setWished(w => !w)}
+                aria-label="Wishlist"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24"
+                  fill={wished ? 'currentColor' : 'none'}
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
+                </svg>
+              </button>
+              <button
+                className={`mpd-cart-btn ${addedToCart ? 'added' : ''}`}
+                onClick={handleAddToCart}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                  <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0"/>
+                </svg>
+                {addedToCart ? '✓ Added!' : 'Add to Cart'}
+              </button>
+              <button className="mpd-buy-btn" onClick={handleBuyNow}>
+                Buy Now
+              </button>
+            </>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', gap: 10 }}>
+              <button className="mpd-cart-btn" disabled style={{ opacity: 0.5 }}>
+                Out of Stock
+              </button>
+              <NotifyMe productId={product._id}/>
+            </div>
+          )}
+        </div>
+      </div>
+
     </div>
   );
 };

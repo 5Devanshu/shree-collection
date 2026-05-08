@@ -171,3 +171,23 @@ h1, h2, h3, h4, h5, h6 {
 .status-pending   { background-color: var(--outline-variant);    color: var(--on-surface-variant); }
 .status-shipped   { background-color: var(--primary-fixed);      color: var(--on-primary-fixed); }
 .status-delivered { background-color: var(--primary);            color: var(--on-primary); }
+/* ── Mobile global variables ───────────────────────────────── */
+:root {
+  --bottom-nav-height: 64px;
+  --mobile-header-height: 60px;
+  --gold:      #d4af37;
+  --gold-dark: #735c00;
+  --surface-container-high: #e8e8e8;
+  --on-surface-variant: #4d4635;
+  --radius-pill: 999px;
+  --spacing-1: 0.25rem;
+  --spacing-3: 0.75rem;
+  --spacing-5: 1.25rem;
+}
+
+@media (max-width: 768px) {
+  /* Global mobile padding so content clears bottom nav */
+  .app > *:not(.bottom-nav):not(.mobile-header) {
+    padding-bottom: 0;
+  }
+}
