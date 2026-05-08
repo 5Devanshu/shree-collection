@@ -61,7 +61,7 @@ client.interceptors.response.use(
   (error) => {
     const message =
       error.response?.data?.message || error.message || 'Something went wrong';
-    
+
     if (API_DEBUG) {
       console.error('❌ API Error:', {
         status: error.response?.status,
@@ -102,12 +102,14 @@ export const adminLogout   = ()     => {
 };
 
 // ── Auth — Customer ───────────────────────────────────────────────────────────
-export const customerRegister = (data) => client.post('/customer-auth/register', data);
-export const customerLogin    = (data) => client.post('/customer-auth/login', data);
-export const getMyProfile     = ()     => client.get('/customer-auth/me');
-export const updateMyProfile  = (data) => client.put('/customer-auth/profile', data);
-export const changePassword   = (data) => client.patch('/customer-auth/change-password', data);
-export const verifyCustomerToken = (token) => client.post('/customer-auth/verify-token', { token });
+// ✅ All routes corrected to /customers/* (maps to backend modules/customer/)
+export const customerRegister    = (data) => client.post('/customers/register', data);
+export const customerLogin       = (data) => client.post('/customers/login', data);
+export const getMyProfile        = ()     => client.get('/customers/me');
+export const updateMyProfile     = (data) => client.put('/customers/me', data);
+export const changePassword      = (data) => client.put('/customers/me/change-password', data);
+export const verifyCustomerToken = ()     => client.get('/customers/me'); // 200 = token valid, 401 = expired
+
 // ── Customer Orders ───────────────────────────────────────────────────────────
 export const getMyOrders    = ()        => client.get('/customers/orders');
 export const getMyOrderById = (orderId) => client.get(`/customers/orders/${orderId}`);
@@ -115,6 +117,7 @@ export const getMyOrderById = (orderId) => client.get(`/customers/orders/${order
 // ── Customer Addresses ────────────────────────────────────────────────────────
 export const addAddress    = (data)      => client.post('/customers/me/addresses', data);
 export const deleteAddress = (addressId) => client.delete(`/customers/me/addresses/${addressId}`);
+
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
 export const createCategory   = (data)       => client.post('/categories', data);
@@ -125,7 +128,7 @@ export const deleteCategory   = (id)         => client.delete(`/categories/${id}
 export const fetchProducts    = (params)     => client.get('/products', { params });
 export const fetchProductById = (id)         => client.get(`/products/${id}`);
 export const createProduct    = (data)       => client.post('/products', data);
-export const updateProduct = (id, data) => client.patch(`/products/${id}`, data);
+export const updateProduct    = (id, data)   => client.patch(`/products/${id}`, data);
 export const deleteProduct    = (id)         => client.delete(`/products/${id}`);
 export const toggleFeatured   = (id)         => client.patch(`/products/${id}/featured`);
 
@@ -145,24 +148,24 @@ export const getSubscribers     = (productId) =>
   client.get(`/stock-notify/${productId}/subscribers`);
 
 // ── Orders ────────────────────────────────────────────────────────────────────
-export const createOrder       = (data)   => client.post('/orders', data);
-export const createDemoOrder   = (data)   => client.post('/orders/demo', data);
-export const verifyPayment     = (id)     => client.post(`/orders/${id}/verify-payment`);
-export const fetchOrders       = (params) => client.get('/orders', { params });
-export const fetchOrderById    = (id)     => client.get(`/orders/${id}`);
+export const createOrder       = (data)     => client.post('/orders', data);
+export const createDemoOrder   = (data)     => client.post('/orders/demo', data);
+export const verifyPayment     = (id)       => client.post(`/orders/${id}/verify-payment`);
+export const fetchOrders       = (params)   => client.get('/orders', { params });
+export const fetchOrderById    = (id)       => client.get(`/orders/${id}`);
 export const updateOrderStatus = (id, data) => client.patch(`/orders/${id}/status`, data);
-export const fetchOrderStats   = ()       => client.get('/orders/stats');
+export const fetchOrderStats   = ()         => client.get('/orders/stats');
 
 // ── Upload — both use same endpoint, admin token handles auth ─────────────────
 export const uploadImage         = (formData) => client.post('/media/upload', formData);
 export const uploadCategoryImage = (formData) => client.post('/media/upload', formData);
 
-// ── Payment — PhonePe ──────────────────────────────────────────────────────────
-export const initiatePhonePePayment = (data) => 
+// ── Payment — PhonePe ─────────────────────────────────────────────────────────
+export const initiatePhonePePayment = (data) =>
   client.post('/payment/phonepe/initiate', data);
-  
-export const confirmPhonePePayment = (data) => 
+
+export const confirmPhonePePayment = (data) =>
   client.post('/payment/phonepe/confirm', data);
-  
-export const checkPhonePePaymentStatus = (merchantTransactionId) => 
+
+export const checkPhonePePaymentStatus = (merchantTransactionId) =>
   client.get(`/payment/phonepe/status/${merchantTransactionId}`);
