@@ -131,6 +131,14 @@ export const createProduct    = (data)       => client.post('/products', data);
 export const updateProduct    = (id, data)   => client.patch(`/products/${id}`, data);
 export const deleteProduct    = (id)         => client.delete(`/products/${id}`);
 export const toggleFeatured   = (id)         => client.patch(`/products/${id}/featured`);
+export const getFeaturedProducts = ()        => client.get('/products/featured');
+
+// ── Cart ───────────────────────────────────────────────────────────────────────
+export const getCart            = ()         => client.get('/cart');
+export const addToCart          = (data)     => client.post('/cart/add', data);
+export const updateCartItem     = (id, data) => client.patch(`/cart/item/${id}`, data);
+export const removeFromCart     = (id)       => client.delete(`/cart/item/${id}`);
+export const clearCart          = ()         => client.delete('/cart/clear');
 
 // ── Discounts ─────────────────────────────────────────────────────────────────
 export const getDiscountedProducts = ()         => client.get('/discounts');

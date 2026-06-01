@@ -1,6 +1,7 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { CustomerProvider, useCustomer } from './context/CustomerContext';
+import { StoreProvider } from './context/StoreContext';
 
 import Navbar from './components/Navbar';
 import Hero from './components/Hero';
@@ -60,7 +61,10 @@ function App() {
     <Router>
       {/* CustomerProvider is INSIDE Router — useNavigate works in its children */}
       <CustomerProvider>
-        <AppRoutes />
+        {/* StoreProvider is inside Router so any store action can navigate if needed */}
+        <StoreProvider>
+          <AppRoutes />
+        </StoreProvider>
       </CustomerProvider>
     </Router>
   );
