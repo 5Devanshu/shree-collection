@@ -18,6 +18,7 @@ const EMPTY_FORM = {
   isFeatured:  false,
   image:       '',
   gallery:     [],
+  sizes:       [],
 };
 
 const labelStyle = {
@@ -48,6 +49,7 @@ const AdminProducts = () => {
 
   const [imageUploading,   setImageUploading]   = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
+  const [sizeInput,        setSizeInput]        = useState('');
 
   // ── Load data ─────────────────────────────────────────────────────────────
   const loadData = useCallback(async () => {
@@ -89,6 +91,7 @@ const AdminProducts = () => {
       isFeatured:  p.isFeatured        || false,
       image:       p.image?.url        || p.image || '',
       gallery:     Array.isArray(p.gallery) ? p.gallery : [],
+      sizes:       Array.isArray(p.sizes) ? p.sizes : [],
     });
     setEditingId(p._id);
     setFormError('');
@@ -100,6 +103,7 @@ const AdminProducts = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
     setFormError('');
+    setSizeInput('');
   };
 
   const handleChange = (e) => {
@@ -173,6 +177,7 @@ const AdminProducts = () => {
         isFeatured:  form.isFeatured,
         gallery:     Array.isArray(form.gallery) ? form.gallery : [],
         stock:       Number(form.stock) || 0,
+        sizes:       Array.isArray(form.sizes) ? form.sizes : [],
         // stockStatus is auto-computed by backend pre-save hook — never sent manually
       };
 
@@ -523,6 +528,91 @@ const AdminProducts = () => {
                 <textarea name="description" value={form.description} onChange={handleChange}
                   placeholder="Describe the product in detail…" rows={4}
                   style={{ ...inputStyle, resize:'vertical', lineHeight:1.6 }} />
+              </div>
+
+              {/* Sizes — optional */}
+              <div style={{ marginBottom:'1.5rem' }}>
+                <label style={labelStyle}>Sizes <span style={{ fontWeight:400, textTransform:'none' }}>(optional)</span></label>
+
+                {/* Tag-style size pills */}
+                <div style={{ display:'flex', flexWrap:'wrap', gap:'0.5rem', marginBottom:'1rem' }}>
+                  {form.sizes.map((size, idx) => (
+                    <span
+                      key={idx}
+                      style={{
+                        display:'inline-flex', alignItems:'center', gap:'6px',
+                        padding:'4px 12px', border:'1px solid #735c00',
+                        borderRadius:'4px', fontSize:'0.85rem',
+                        backgroundColor:'#faf7f2',
+                        color:'#333',
+                      }}
+                    >
+                      {size}
+                      <button
+                        type="button"
+                        onClick={() => setForm(prev => ({
+                          ...prev,
+                          sizes: prev.sizes.filter((_, i) => i !== idx),
+                        }))}
+                        style={{
+                          background:'none', border:'none', cursor:'pointer',
+                          color:'#999', lineHeight:1, fontSize:'1rem',
+                        }}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+
+                {/* Input to add a new size */}
+                <div style={{ display:'flex', gap:'0.5rem' }}>
+                  <input
+                    type="text"
+                    placeholder='e.g. S, M, L  or  5, 6, 7  or  Free Size'
+                    value={sizeInput}
+                    onChange={(e) => setSizeInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        const val = sizeInput.trim();
+                        if (val && !form.sizes.includes(val)) {
+                          setForm(prev => ({ ...prev, sizes: [...prev.sizes, val] }));
+                        }
+                        setSizeInput('');
+                      }
+                    }}
+                    style={{
+                      flex:1, padding:'0.65rem 0.85rem',
+                      border:'1px solid #e0d5c5', borderRadius:6,
+                      fontFamily:'inherit', fontSize:'0.9rem',
+                      background:'#faf7f2', outline:'none',
+                      boxSizing:'border-box',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const val = sizeInput.trim();
+                      if (val && !form.sizes.includes(val)) {
+                        setForm(prev => ({ ...prev, sizes: [...prev.sizes, val] }));
+                      }
+                      setSizeInput('');
+                    }}
+                    style={{
+                      padding:'0.65rem 1.4rem', borderRadius:6,
+                      background:'#faf7f2', border:'1px solid #e0d5c5',
+                      fontFamily:'inherit', fontSize:'0.9rem', fontWeight:500,
+                      cursor:'pointer',
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+
+                <p style={{ margin:'0.5rem 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                  Press Enter or comma to add a size. Leave empty if not applicable.
+                </p>
               </div>
 
               {/* Actions */}

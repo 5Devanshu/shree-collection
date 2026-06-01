@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
 const CustomerContext = createContext(null);
@@ -32,6 +33,7 @@ client.interceptors.response.use(
 );
 
 export const CustomerProvider = ({ children }) => {
+  const navigate = useNavigate();
   const [customer, setCustomer] = useState(null);
   const [loading,  setLoading]  = useState(true);
 
@@ -71,8 +73,9 @@ export const CustomerProvider = ({ children }) => {
     localStorage.setItem(TOKEN_KEY, token);                       // ✅ correct key
     localStorage.setItem(DATA_KEY,  JSON.stringify(userData));    // ✅ correct key
     setCustomer(userData);
+    navigate('/');                                                // ← redirect to home after login
     return res.data;
-  }, []);
+  }, [navigate]);
 
   // ── Register ───────────────────────────────────────────────────────────────
   const register = useCallback(async (name, email, password, phone) => {
