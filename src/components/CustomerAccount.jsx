@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate }    from 'react-router-dom';
 import { useCustomer }    from '../context/CustomerContext';
-import { getMyOrders }    from '../api/client';
+import { getMyOrders, addAddress, deleteAddress } from '../api/client';
 
 const CustomerAccount = ({ tab: initialTab = 'orders' }) => {
   const navigate             = useNavigate();
@@ -11,6 +11,25 @@ const CustomerAccount = ({ tab: initialTab = 'orders' }) => {
   const [orders,       setOrders]       = useState([]);
   const [ordersLoading,setOrdersLoading]= useState(false);
   const [ordersError,  setOrdersError]  = useState('');
+
+  // ── Address Management ──────────────────────────────────────────────────
+  const [addresses,       setAddresses]       = useState([]);
+  const [addressesLoading,setAddressesLoading]= useState(false);
+  const [addressesError,  setAddressesError]  = useState('');
+  const [deletingId,      setDeletingId]      = useState(null);
+  const [showAddForm,     setShowAddForm]     = useState(false);
+  
+  const [formData, setFormData] = useState({
+    label:    '',
+    line1:    '',
+    line2:    '',
+    city:     '',
+    state:    '',
+    pincode:  '',
+    country:  'India',
+  });
+  const [formError, setFormError] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
 
   // ── Redirect if not logged in ────────────────────────────────────────────
   useEffect(() => {
