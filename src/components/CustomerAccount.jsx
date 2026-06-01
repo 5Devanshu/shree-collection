@@ -36,6 +36,27 @@ const CustomerAccount = ({ tab: initialTab = 'orders' }) => {
     if (!customer) navigate('/login');
   }, [customer, navigate]);
 
+  // ── Load addresses ──────────────────────────────────────────────────────
+  const loadAddresses = useCallback(async () => {
+    setAddressesLoading(true);
+    setAddressesError('');
+    try {
+      // Addresses are fetched as part of customer profile
+      // They're stored in customer.savedAddresses
+      setAddresses(customer?.savedAddresses || []);
+    } catch (err) {
+      setAddressesError('Failed to load addresses. Please try again.');
+    } finally {
+      setAddressesLoading(false);
+    }
+  }, [customer?.savedAddresses]);
+
+  useEffect(() => {
+    if (activeTab === 'addresses') {
+      loadAddresses();
+    }
+  }, [activeTab, loadAddresses]);
+
   // ── Fetch orders ─────────────────────────────────────────────────────────
   const loadOrders = useCallback(async () => {
     setOrdersLoading(true);
@@ -58,6 +79,76 @@ const CustomerAccount = ({ tab: initialTab = 'orders' }) => {
   const handleLogout = () => {
     logout();
     navigate('/');
+  };
+
+  // ── Address form handlers ───────────────────────────────────────────────
+  const handleAddressInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setFormError('');
+  };
+
+  const validateAddressForm = () => {
+    if (!formData.label?.trim()) return 'Please select a label (Home/Office/Other)';
+    if (!formData.line1?.trim()) return 'Address line 1 is required';
+    if (!formData.city?.trim()) return 'City is required';
+    if (!formData.state?.trim()) return 'State is required';
+    if (!formData.pincode?.trim()) return 'Pincode is required';
+    return '';
+  };
+
+  const handleAddAddress = async (e) => {
+    e.preventDefault();
+    const error = validateAddressForm();
+    if (error) {
+      setFormError(error);
+      return;
+    }
+
+    setFormLoading(true);
+    setFormError('');
+    try {
+      await addAddress({
+        label: formData.label,
+        addressLine1: formData.line1,
+        addressLine2: formData.line2,
+        city: formData.city,
+        state: formData.state,
+        postalCode: formData.pincode,
+        country: formData.country,
+      });
+
+      // Reset form and reload addresses
+      setFormData({
+        label: '',
+        line1: '',
+        line2: '',
+        city: '',
+        state: '',
+        pincode: '',
+        country: 'India',
+      });
+      setShowAddForm(false);
+      await loadAddresses();
+    } catch (err) {
+      setFormError(err.message || 'Failed to add address. Please try again.');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleDeleteAddress = async (addressId) => {
+    if (!window.confirm('Are you sure you want to delete this address?')) return;
+
+    setDeletingId(addressId);
+    try {
+      await deleteAddress(addressId);
+      await loadAddresses();
+    } catch (err) {
+      setAddressesError(err.message || 'Failed to delete address. Please try again.');
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const formatDate = (iso) => {
@@ -241,22 +332,279 @@ const CustomerAccount = ({ tab: initialTab = 'orders' }) => {
           {/* ADDRESSES TAB */}
           {activeTab === 'addresses' && (
             <div>
-              <h1 style={{ fontSize:'2rem', fontWeight:700, marginBottom:'1.5rem' }}>Addresses</h1>
-              <hr style={{ border:'none', borderTop:'1px solid #e8e0d5', marginBottom:'1.5rem' }} />
-              {customer.savedAddresses?.length > 0 ? (
-                customer.savedAddresses.map((addr, i) => (
-                  <div key={i} style={{ background:'#fff', border:'1px solid #e8e0d5', borderRadius:8, padding:'1.25rem', marginBottom:'1rem', maxWidth:480 }}>
-                    <div style={{ fontSize:'0.9rem', lineHeight:1.7, color:'#333' }}>
-                      {addr.line1 || addr.addressLine1}<br />
-                      {(addr.line2 || addr.addressLine2) && <>{addr.line2 || addr.addressLine2}<br /></>}
-                      {addr.city}{addr.state ? `, ${addr.state}` : ''} — {addr.pincode || addr.postalCode}<br />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h1 style={{ fontSize: '2rem', fontWeight: 700 }}>Addresses</h1>
+                <button
+                  onClick={() => setShowAddForm(!showAddForm)}
+                  style={{
+                    padding: '0.65rem 1.25rem',
+                    background: showAddForm ? '#e8e0d5' : '#735c00',
+                    color: showAddForm ? '#333' : '#fff',
+                    border: 'none',
+                    borderRadius: 6,
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {showAddForm ? 'Cancel' : '+ Add Address'}
+                </button>
+              </div>
+              <hr style={{ border: 'none', borderTop: '1px solid #e8e0d5', marginBottom: '1.5rem' }} />
+
+              {/* Add Address Form */}
+              {showAddForm && (
+                <div style={{ background: '#fff', border: '1px solid #e8e0d5', borderRadius: 8, padding: '1.5rem', marginBottom: '2rem', maxWidth: 500 }}>
+                  <h2 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>Add New Address</h2>
+                  
+                  {formError && (
+                    <div style={{ background: '#fee2e2', color: '#991b1b', padding: '0.75rem 1rem', borderRadius: 6, marginBottom: '1rem', fontSize: '0.9rem' }}>
+                      {formError}
+                    </div>
+                  )}
+
+                  <form onSubmit={handleAddAddress}>
+                    {/* Label Picker */}
+                    <div style={{ marginBottom: '1rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#888', marginBottom: 6 }}>
+                        Label *
+                      </label>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        {['Home', 'Office', 'Other'].map(lbl => (
+                          <button
+                            key={lbl}
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, label: lbl }))}
+                            style={{
+                              flex: 1,
+                              padding: '0.6rem',
+                              background: formData.label === lbl ? '#735c00' : '#f5f1eb',
+                              color: formData.label === lbl ? '#fff' : '#333',
+                              border: '1px solid ' + (formData.label === lbl ? '#735c00' : '#e8e0d5'),
+                              borderRadius: 6,
+                              fontSize: '0.85rem',
+                              fontWeight: 500,
+                              cursor: 'pointer',
+                              fontFamily: 'inherit',
+                            }}
+                          >
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Address Line 1 */}
+                    <div style={{ marginBottom: '1rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#888', marginBottom: 6 }}>
+                        Address Line 1 *
+                      </label>
+                      <input
+                        type="text"
+                        name="line1"
+                        value={formData.line1}
+                        onChange={handleAddressInputChange}
+                        placeholder="e.g., 123 Main Street"
+                        style={{
+                          width: '100%',
+                          padding: '0.65rem 0.9rem',
+                          border: '1px solid #e8e0d5',
+                          borderRadius: 6,
+                          fontSize: '0.9rem',
+                          fontFamily: 'inherit',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+
+                    {/* Address Line 2 */}
+                    <div style={{ marginBottom: '1rem' }}>
+                      <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#888', marginBottom: 6 }}>
+                        Address Line 2 (Optional)
+                      </label>
+                      <input
+                        type="text"
+                        name="line2"
+                        value={formData.line2}
+                        onChange={handleAddressInputChange}
+                        placeholder="e.g., Apartment 4B"
+                        style={{
+                          width: '100%',
+                          padding: '0.65rem 0.9rem',
+                          border: '1px solid #e8e0d5',
+                          borderRadius: 6,
+                          fontSize: '0.9rem',
+                          fontFamily: 'inherit',
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    </div>
+
+                    {/* City & State */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#888', marginBottom: 6 }}>
+                          City *
+                        </label>
+                        <input
+                          type="text"
+                          name="city"
+                          value={formData.city}
+                          onChange={handleAddressInputChange}
+                          placeholder="e.g., Mumbai"
+                          style={{
+                            width: '100%',
+                            padding: '0.65rem 0.9rem',
+                            border: '1px solid #e8e0d5',
+                            borderRadius: 6,
+                            fontSize: '0.9rem',
+                            fontFamily: 'inherit',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#888', marginBottom: 6 }}>
+                          State *
+                        </label>
+                        <input
+                          type="text"
+                          name="state"
+                          value={formData.state}
+                          onChange={handleAddressInputChange}
+                          placeholder="e.g., Maharashtra"
+                          style={{
+                            width: '100%',
+                            padding: '0.65rem 0.9rem',
+                            border: '1px solid #e8e0d5',
+                            borderRadius: 6,
+                            fontSize: '0.9rem',
+                            fontFamily: 'inherit',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Pincode & Country */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1.5rem' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#888', marginBottom: 6 }}>
+                          Pincode *
+                        </label>
+                        <input
+                          type="text"
+                          name="pincode"
+                          value={formData.pincode}
+                          onChange={handleAddressInputChange}
+                          placeholder="e.g., 400001"
+                          style={{
+                            width: '100%',
+                            padding: '0.65rem 0.9rem',
+                            border: '1px solid #e8e0d5',
+                            borderRadius: 6,
+                            fontSize: '0.9rem',
+                            fontFamily: 'inherit',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#888', marginBottom: 6 }}>
+                          Country
+                        </label>
+                        <input
+                          type="text"
+                          name="country"
+                          value={formData.country}
+                          onChange={handleAddressInputChange}
+                          style={{
+                            width: '100%',
+                            padding: '0.65rem 0.9rem',
+                            border: '1px solid #e8e0d5',
+                            borderRadius: 6,
+                            fontSize: '0.9rem',
+                            fontFamily: 'inherit',
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={formLoading}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem',
+                        background: formLoading ? '#ddd' : '#735c00',
+                        color: '#fff',
+                        border: 'none',
+                        borderRadius: 6,
+                        fontSize: '0.95rem',
+                        fontWeight: 600,
+                        cursor: formLoading ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {formLoading ? 'Adding...' : 'Add Address'}
+                    </button>
+                  </form>
+                </div>
+              )}
+
+              {/* Addresses List */}
+              {addressesLoading && (
+                <p style={{ color: '#888' }}>Loading addresses…</p>
+              )}
+              {addressesError && (
+                <p style={{ color: '#c0392b' }}>{addressesError}</p>
+              )}
+              {!addressesLoading && !addressesError && addresses.length === 0 && (
+                <p style={{ color: '#888' }}>No saved addresses yet. Add one to get started!</p>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+                {addresses.map((addr) => (
+                  <div key={addr._id} style={{ background: '#fff', border: '1px solid #e8e0d5', borderRadius: 8, padding: '1.25rem', position: 'relative' }}>
+                    {/* Label badge */}
+                    {addr.label && (
+                      <span style={{ position: 'absolute', top: '0.75rem', right: '0.75rem', background: '#735c00', color: '#fff', padding: '0.25rem 0.65rem', borderRadius: 20, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase' }}>
+                        {addr.label}
+                      </span>
+                    )}
+
+                    {/* Address content */}
+                    <div style={{ fontSize: '0.9rem', lineHeight: 1.7, color: '#333', paddingRight: '60px' }}>
+                      {addr.addressLine1 || addr.line1}<br />
+                      {(addr.addressLine2 || addr.line2) && <>{addr.addressLine2 || addr.line2}<br /></>}
+                      {addr.city}{addr.state ? `, ${addr.state}` : ''} — {addr.postalCode || addr.pincode}<br />
                       {addr.country || 'India'}
                     </div>
+
+                    {/* Delete button */}
+                    <button
+                      onClick={() => handleDeleteAddress(addr._id)}
+                      disabled={deletingId === addr._id}
+                      style={{
+                        marginTop: '1rem',
+                        padding: '0.5rem 1rem',
+                        background: deletingId === addr._id ? '#ddd' : '#fee2e2',
+                        color: deletingId === addr._id ? '#999' : '#c0392b',
+                        border: '1px solid ' + (deletingId === addr._id ? '#ddd' : '#f5b3b3'),
+                        borderRadius: 6,
+                        fontSize: '0.85rem',
+                        fontWeight: 500,
+                        cursor: deletingId === addr._id ? 'not-allowed' : 'pointer',
+                        fontFamily: 'inherit',
+                      }}
+                    >
+                      {deletingId === addr._id ? 'Deleting...' : 'Remove'}
+                    </button>
                   </div>
-                ))
-              ) : (
-                <p style={{ color:'#888' }}>No saved addresses yet.</p>
-              )}
+                ))}
+              </div>
             </div>
           )}
 
