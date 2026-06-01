@@ -44,7 +44,7 @@ const Navbar = () => {
   const handleCustomerLogout = () => {
     logout();
     setOpenDropdown(null); // Close dropdown
-    navigate('/');
+    navigate('/login');
   };
 
   const toggleDropdown = (dropdown) => {

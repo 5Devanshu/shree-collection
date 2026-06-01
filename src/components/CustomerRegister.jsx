@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { customerRegister } from '../api/client';
+import { Link, useNavigate } from 'react-router-dom';
+import { useCustomer } from '../context/CustomerContext';
 
 const CustomerRegister = () => {
+  const { register } = useCustomer();
   const navigate = useNavigate();
 
   const [form, setForm] = useState({
@@ -35,19 +36,8 @@ const CustomerRegister = () => {
 
     setLoading(true);
     try {
-      // ✅ Spread each field individually — NOT { name: form }
-      const res = await customerRegister({
-        name:     form.name,
-        email:    form.email,
-        phone:    form.phone,
-        password: form.password,
-      });
-
-      const { token, customer } = res.data;
-      localStorage.setItem('shree_customer_token', token);
-      localStorage.setItem('shree_customer_data',  JSON.stringify(customer));
-
-      navigate('/account');
+      await register(form.name, form.email, form.password, form.phone);
+      navigate('/');           // ← navigate here, after register succeeds
     } catch (err) {
       setError(err?.response?.data?.message || 'Registration failed. Please try again.');
     } finally {

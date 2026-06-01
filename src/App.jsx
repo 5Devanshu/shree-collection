@@ -1,7 +1,7 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { StoreProvider }    from './context/StoreContext';
-import { CustomerProvider } from './context/CustomerContext';
+import { CustomerProvider, useCustomer } from './context/CustomerContext';
 import Navbar               from './components/Navbar';
 import MobileHeader         from './components/MobileHeader';
 import BottomNav            from './components/BottomNav';
@@ -33,6 +33,21 @@ const AppLayout = () => {
   const isCheckout = location.pathname.startsWith('/checkout') || location.pathname.startsWith('/payment');
   const hideShell  = isAdmin || isAuth;
 
+  // ── Route guards — defined inside AppLayout so they have access to Router context ──
+  const GuestRoute = React.memo(({ children }) => {
+    const { customer, loading } = useCustomer();
+    if (loading) return null;
+    if (customer) return <Navigate to="/" replace />;
+    return children;
+  });
+
+  const PrivateRoute = React.memo(({ children }) => {
+    const { customer, loading } = useCustomer();
+    if (loading) return null;
+    if (!customer) return <Navigate to="/login" replace />;
+    return children;
+  });
+
   return (
     <div className="app">
       {/* Desktop navbar — hidden on admin/auth pages */}
@@ -44,52 +59,52 @@ const AppLayout = () => {
       )}
 
       <Routes>
-        {/* Storefront */}
-        <Route path="/"                      element={<><Hero /><FeaturedGrid /></>} />
-        <Route path="/collections/:category" element={<CategoryPage />} />
-        <Route path="/product/:id"           element={<ProductDescription />} />
-        <Route path="/checkout"              element={<Checkout />} />
-        <Route path="/checkout/callback"     element={<CheckoutCallback />} />
-        <Route path="/payment/success"       element={<PaymentSuccess />} />
+          {/* Storefront */}
+          <Route path="/"                      element={<><Hero /><FeaturedGrid /></>} />
+          <Route path="/collections/:category" element={<CategoryPage />} />
+          <Route path="/product/:id"           element={<ProductDescription />} />
+          <Route path="/checkout"              element={<Checkout />} />
+          <Route path="/checkout/callback"     element={<CheckoutCallback />} />
+          <Route path="/payment/success"       element={<PaymentSuccess />} />
 
-        {/* Auth */}
-        <Route path="/login"          element={<CustomerLogin />} />
-        <Route path="/register"       element={<CustomerRegister />} />
-        <Route path="/admin/register" element={<AdminRegister />} />
+          {/* Auth — redirect home if already logged in */}
+          <Route path="/login"          element={<GuestRoute><CustomerLogin /></GuestRoute>} />
+          <Route path="/register"       element={<GuestRoute><CustomerRegister /></GuestRoute>} />
+          <Route path="/admin/register" element={<AdminRegister />} />
 
-        {/* Customer account */}
-        <Route path="/account"           element={<CustomerAccount />} />
-        <Route path="/account/orders"    element={<CustomerAccount tab="orders" />} />
-        <Route path="/account/profile"   element={<CustomerAccount tab="profile" />} />
-        <Route path="/account/addresses" element={<CustomerAccount tab="addresses" />} />
+          {/* Customer account — protected route */}
+          <Route path="/account"           element={<PrivateRoute><CustomerAccount /></PrivateRoute>} />
+          <Route path="/account/orders"    element={<PrivateRoute><CustomerAccount tab="orders" /></PrivateRoute>} />
+          <Route path="/account/profile"   element={<PrivateRoute><CustomerAccount tab="profile" /></PrivateRoute>} />
+          <Route path="/account/addresses" element={<PrivateRoute><CustomerAccount tab="addresses" /></PrivateRoute>} />
 
-        {/* Policies */}
-        <Route path="/terms"    element={<TermsAndConditions />} />
-        <Route path="/privacy"  element={<TermsAndConditions />} />
-        <Route path="/shipping" element={<TermsAndConditions />} />
-        <Route path="/returns"  element={<TermsAndConditions />} />
+          {/* Policies */}
+          <Route path="/terms"    element={<TermsAndConditions />} />
+          <Route path="/privacy"  element={<TermsAndConditions />} />
+          <Route path="/shipping" element={<TermsAndConditions />} />
+          <Route path="/returns"  element={<TermsAndConditions />} />
 
-        {/* Admin */}
-        <Route path="/admin/*" element={<AdminPanel />} />
-      </Routes>
+          {/* Admin */}
+          <Route path="/admin/*" element={<AdminPanel />} />
+        </Routes>
 
-      {/* Footer — desktop only, hidden on admin */}
-      {!hideShell && <Footer />}
+        {/* Footer — desktop only, hidden on admin */}
+        {!hideShell && <Footer />}
 
-      {/* Bottom nav — mobile only, hidden on admin/auth/checkout */}
-      {!hideShell && !isCheckout && <BottomNav />}
-    </div>
-  );
+        {/* Bottom nav — mobile only, hidden on admin/auth/checkout */}
+        {!hideShell && !isCheckout && <BottomNav />}
+      </div>
+    );
 };
 
 function App() {
   return (
     <StoreProvider>
-      <CustomerProvider>
-        <Router>
+      <Router>
+        <CustomerProvider>    {/* ← must be inside Router so useNavigate works */}
           <AppLayout />
-        </Router>
-      </CustomerProvider>
+        </CustomerProvider>
+      </Router>
     </StoreProvider>
   );
 }

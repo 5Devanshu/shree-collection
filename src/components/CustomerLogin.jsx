@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { customerLogin, adminLogin } from '../api/client';
+import { Link, useNavigate } from 'react-router-dom';
+import { useCustomer } from '../context/CustomerContext';
+import { adminLogin } from '../api/client';
 
 const CustomerLogin = () => {
+  const { login } = useCustomer();
   const navigate = useNavigate();
 
   const [form,    setForm]    = useState({ email: '', password: '' });
@@ -14,38 +16,31 @@ const CustomerLogin = () => {
     setError('');
   };
 
-const onSubmit = async (e) => {
-  e.preventDefault();
-  setError('');
-  setLoading(true);
+  const onSubmit = async (e) => {
+    e.preventDefault();          // ← prevents page reload
+    setError('');
+    setLoading(true);
 
-  const { email, password } = form;
+    const { email, password } = form;
 
-  try {
-    const res = await customerLogin({ email, password });
-    const { token, customer } = res.data;
-
-    // ✅ Must match what CustomerContext reads
-    localStorage.setItem('shree_customer_token', token);
-    localStorage.setItem('shree_customer_data',  JSON.stringify(customer));
-
-    // Force a page reload so CustomerContext picks up the new token
-    window.location.href = '/account';   // ← use this instead of navigate()
-  } catch (err) {
-    // Try admin login as fallback
     try {
-      const adminRes = await adminLogin({ email, password });
-      const { token, admin } = adminRes.data;
-      localStorage.setItem('shree_admin_token', token);
-      localStorage.setItem('shree_admin_data',  JSON.stringify(admin));
-      window.location.href = '/admin';
-    } catch {
-      setError('Invalid email or password');
+      await login(email, password);
+      navigate('/');           // ← navigate here, after login succeeds
+    } catch (err) {
+      // Try admin login as fallback
+      try {
+        const adminRes = await adminLogin({ email, password });
+        const { token, admin } = adminRes.data;
+        localStorage.setItem('shree_admin_token', token);
+        localStorage.setItem('shree_admin_data',  JSON.stringify(admin));
+        window.location.href = '/admin';
+      } catch {
+        setError(err?.response?.data?.message || 'Invalid email or password');
+      }
+    } finally {
+      setLoading(false);
     }
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   return (
     <div className="auth-page">
