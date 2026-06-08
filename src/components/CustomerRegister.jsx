@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useCustomer } from '../context/CustomerContext';
-
+import './CustomerAuth.css';
 const CustomerRegister = () => {
   const { register } = useCustomer();
   const navigate = useNavigate();
@@ -46,10 +46,10 @@ const CustomerRegister = () => {
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-container">
-        <h1 className="display-sm">Create Account</h1>
-        <p className="body-md disclaimer">Join Shree Collection today.</p>
+<div className="auth-page">
+  <div className="auth-container">
+    <h1 className="display-sm">Create Account</h1>
+    <p className="body-md auth-subtitle">Join the Shree Collection family.</p>
 
         {error && <div className="auth-error">{error}</div>}
 
