@@ -1,55 +1,90 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useStore }    from '../context/StoreContext';
-import { useCustomer } from '../context/CustomerContext';
-import { adminLogout } from '../api/client';
+import { Link, useNavigate }          from 'react-router-dom';
+import { useStore }                   from '../context/StoreContext';
+import { adminLogout }                from '../api/client';
 import './Navbar.css';
 
 const Navbar = () => {
   const { categories, cartCount } = useStore();
-  const { customer, isLoggedIn, logout } = useCustomer();
   const navigate = useNavigate();
 
   // ── Dropdown state ────────────────────────────────────────────────────────
-  const [openDropdown, setOpenDropdown] = useState(null); // 'collections', 'admin', 'account', or null
+  const [openDropdown, setOpenDropdown] = useState(null);
 
-  // ── Check admin token ─────────────────────────────────────────────────────
+  // ── Admin auth state ──────────────────────────────────────────────────────
   const [isAdmin, setIsAdmin] = useState(false);
 
+  // ── Reseller auth state ───────────────────────────────────────────────────
+  const [reseller, setReseller]         = useState(null);
+  const [isResellerLoggedIn, setIsResellerLoggedIn] = useState(false);
+
+  // Check admin token on mount + on storage change (other tabs)
   useEffect(() => {
     const checkAdmin = () => {
-      const token = localStorage.getItem('shree_admin_token');
-      setIsAdmin(!!token);
+      setIsAdmin(!!localStorage.getItem('shree_admin_token'));
     };
-
     checkAdmin();
-
-    // Re-check whenever localStorage changes (login / logout in another tab)
     window.addEventListener('storage', checkAdmin);
     return () => window.removeEventListener('storage', checkAdmin);
   }, []);
 
-  // Also re-check on every render for same-tab login
+  // Also re-check on every render (same-tab login)
   useEffect(() => {
-    const token = localStorage.getItem('shree_admin_token');
-    setIsAdmin(!!token);
+    setIsAdmin(!!localStorage.getItem('shree_admin_token'));
   });
 
+  // Check reseller token on mount + storage change
+  useEffect(() => {
+    const checkReseller = () => {
+      const token = localStorage.getItem('resellerToken');
+      const user  = localStorage.getItem('resellerUser');
+      if (token && user) {
+        try {
+          setReseller(JSON.parse(user));
+          setIsResellerLoggedIn(true);
+        } catch {
+          setIsResellerLoggedIn(false);
+          setReseller(null);
+        }
+      } else {
+        setIsResellerLoggedIn(false);
+        setReseller(null);
+      }
+    };
+    checkReseller();
+    window.addEventListener('storage', checkReseller);
+    return () => window.removeEventListener('storage', checkReseller);
+  }, []);
+
+  // ── Logout handlers ───────────────────────────────────────────────────────
   const handleAdminLogout = () => {
     adminLogout();
     setIsAdmin(false);
+    setOpenDropdown(null);
     navigate('/');
   };
 
-  const handleCustomerLogout = () => {
-    logout();
-    setOpenDropdown(null); // Close dropdown
-    navigate('/login');
+  const handleResellerLogout = () => {
+    localStorage.removeItem('resellerToken');
+    localStorage.removeItem('resellerUser');
+    setIsResellerLoggedIn(false);
+    setReseller(null);
+    setOpenDropdown(null);
+    navigate('/');
   };
 
-  const toggleDropdown = (dropdown) => {
-    setOpenDropdown(openDropdown === dropdown ? null : dropdown);
+  const toggleDropdown = (name) => {
+    setOpenDropdown(openDropdown === name ? null : name);
   };
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => setOpenDropdown(null);
+    if (openDropdown) {
+      document.addEventListener('click', handleClickOutside);
+    }
+    return () => document.removeEventListener('click', handleClickOutside);
+  }, [openDropdown]);
 
   return (
     <nav className="navbar glass-gold">
@@ -57,7 +92,7 @@ const Navbar = () => {
 
         {/* ── Left — Collections dropdown ───────────────────────────────── */}
         <div className="nav-links">
-          <div className="nav-dropdown">
+          <div className="nav-dropdown" onClick={(e) => e.stopPropagation()}>
             <span
               className="nav-link label-md"
               style={{ cursor: 'pointer' }}
@@ -73,9 +108,20 @@ const Navbar = () => {
               >
                 All Pieces
               </Link>
-
+              {/* Dynamic categories from StoreContext */}
+              {categories?.map((cat) => (
+                <Link
+                  key={cat.id}
+                  to={`/collections/${cat.slug}`}
+                  className="dropdown-item label-md"
+                  onClick={() => setOpenDropdown(null)}
+                >
+                  {cat.name}
+                </Link>
+              ))}
             </div>
           </div>
+
           <Link to="/" className="nav-link label-md">Home</Link>
         </div>
 
@@ -86,12 +132,12 @@ const Navbar = () => {
           </Link>
         </div>
 
-        {/* ── Right — Auth state ────────────────────────────────────────── */}
+        {/* ── Right — Auth + Cart + Help ────────────────────────────────── */}
         <div className="nav-actions">
 
-          {/* ── Admin is logged in ────────────────────────────────────────── */}
+          {/* ── Admin is logged in ──────────────────────────────────────── */}
           {isAdmin && (
-            <div className="nav-dropdown">
+            <div className="nav-dropdown" onClick={(e) => e.stopPropagation()}>
               <span
                 className="nav-link label-md nav-account-pill"
                 style={{ cursor: 'pointer' }}
@@ -101,41 +147,15 @@ const Navbar = () => {
                 Admin Portal
               </span>
               <div className={`dropdown-content dropdown-content--right ${openDropdown === 'admin' ? 'active' : ''}`}>
-                <Link
-                  to="/admin"
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  Dashboard
-                </Link>
-                <Link
-                  to="/admin/products"
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  Products
-                </Link>
-                <Link
-                  to="/admin/categories"
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  Categories
-                </Link>
-                <Link
-                  to="/admin/orders"
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  Orders
-                </Link>
+                <Link to="/admin"            className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Dashboard</Link>
+                <Link to="/admin/products"   className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Products</Link>
+                <Link to="/admin/categories" className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Categories</Link>
+                <Link to="/admin/orders"     className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Orders</Link>
+                <Link to="/admin/resellers"  className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Resellers</Link>
                 <div className="dropdown-divider" />
                 <button
                   className="dropdown-item label-md dropdown-item--danger"
-                  onClick={() => {
-                    handleAdminLogout();
-                    setOpenDropdown(null);
-                  }}
+                  onClick={handleAdminLogout}
                 >
                   Logout
                 </button>
@@ -143,46 +163,25 @@ const Navbar = () => {
             </div>
           )}
 
-          {/* ── Customer is logged in ─────────────────────────────────────── */}
-          {!isAdmin && isLoggedIn && (
-            <div className="nav-dropdown">
+          {/* ── Reseller is logged in ────────────────────────────────────── */}
+          {!isAdmin && isResellerLoggedIn && (
+            <div className="nav-dropdown" onClick={(e) => e.stopPropagation()}>
               <span
                 className="nav-link label-md nav-account-pill"
                 style={{ cursor: 'pointer' }}
-                onClick={() => toggleDropdown('account')}
+                onClick={() => toggleDropdown('reseller')}
               >
-                <span className="nav-account-dot nav-account-dot--customer" />
-                {customer.name.split(' ')[0]}
+                <span className="nav-account-dot nav-account-dot--reseller" />
+                {reseller?.name?.split(' ')[0] || 'Reseller'}
               </span>
-              <div className={`dropdown-content dropdown-content--right ${openDropdown === 'account' ? 'active' : ''}`}>
-                <Link
-                  to="/account/orders"
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  My Orders
-                </Link>
-                <Link
-                  to="/account/profile"
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  Profile
-                </Link>
-                <Link
-                  to="/account/addresses"
-                  className="dropdown-item label-md"
-                  onClick={() => setOpenDropdown(null)}
-                >
-                  Addresses
-                </Link>
+              <div className={`dropdown-content dropdown-content--right ${openDropdown === 'reseller' ? 'active' : ''}`}>
+                <div className="dropdown-item label-md" style={{ color: 'var(--on-surface-variant)', cursor: 'default' }}>
+                  {reseller?.company || 'Reseller Account'}
+                </div>
                 <div className="dropdown-divider" />
                 <button
                   className="dropdown-item label-md dropdown-item--danger"
-                  onClick={() => {
-                    handleCustomerLogout();
-                    setOpenDropdown(null);
-                  }}
+                  onClick={handleResellerLogout}
                 >
                   Logout
                 </button>
@@ -190,12 +189,14 @@ const Navbar = () => {
             </div>
           )}
 
-          {/* ── Nobody logged in ──────────────────────────────────────────── */}
-          {!isAdmin && !isLoggedIn && (
-            <Link to="/login" className="nav-link label-md">Login</Link>
+          {/* ── Nobody logged in — show Reseller Login ───────────────────── */}
+          {!isAdmin && !isResellerLoggedIn && (
+            <Link to="/reseller/login" className="nav-link label-md">
+              Reseller Login
+            </Link>
           )}
 
-          {/* ── Cart ──────────────────────────────────────────────────────── */}
+          {/* ── Cart ─────────────────────────────────────────────────────── */}
           <Link to="/checkout" className="nav-link label-md">
             Cart
             {cartCount > 0 && (
@@ -203,8 +204,8 @@ const Navbar = () => {
             )}
           </Link>
 
-          {/* ── Terms & Conditions dropdown ──────────────────────────────────── */}
-          <div className="nav-dropdown">
+          {/* ── Help dropdown ─────────────────────────────────────────────── */}
+          <div className="nav-dropdown" onClick={(e) => e.stopPropagation()}>
             <span
               className="nav-link label-md"
               style={{ cursor: 'pointer' }}
@@ -213,34 +214,10 @@ const Navbar = () => {
               Help
             </span>
             <div className={`dropdown-content dropdown-content--right ${openDropdown === 'policies' ? 'active' : ''}`}>
-              <Link
-                to="/terms"
-                className="dropdown-item label-md"
-                onClick={() => setOpenDropdown(null)}
-              >
-                Terms & Conditions
-              </Link>
-              <Link
-                to="/privacy"
-                className="dropdown-item label-md"
-                onClick={() => setOpenDropdown(null)}
-              >
-                Privacy Policy
-              </Link>
-              <Link
-                to="/shipping"
-                className="dropdown-item label-md"
-                onClick={() => setOpenDropdown(null)}
-              >
-                Shipping Policy
-              </Link>
-              <Link
-                to="/returns"
-                className="dropdown-item label-md"
-                onClick={() => setOpenDropdown(null)}
-              >
-                Return & Refund
-              </Link>
+              <Link to="/terms"    className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Terms & Conditions</Link>
+              <Link to="/privacy"  className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Privacy Policy</Link>
+              <Link to="/shipping" className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Shipping Policy</Link>
+              <Link to="/returns"  className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>Return & Refund</Link>
             </div>
           </div>
 
@@ -249,5 +226,13 @@ const Navbar = () => {
     </nav>
   );
 };
+
+
+
+
+
+
+
+
 
 export default Navbar;

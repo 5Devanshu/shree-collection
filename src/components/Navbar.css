@@ -200,3 +200,14 @@
     height: 100px;
   }
 }
+
+/* Reseller account indicator dot */
+.nav-account-dot--reseller {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #c8a84b;   /* gold — matches brand primary */
+  margin-right: 6px;
+  vertical-align: middle;
+}
