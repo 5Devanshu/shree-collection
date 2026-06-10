@@ -1,13 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Link }                        from 'react-router-dom';
 import { useStore }                    from '../context/StoreContext';
-import { useCustomer }                 from '../context/CustomerContext';
 import { initiatePhonePePayment }      from '../api/client';
 import './Checkout.css';
 
 const Checkout = () => {
   const { cart, cartLoading, fetchCart, updateCartItem, removeFromCart } = useStore();
-  const { customer } = useCustomer();
+
 
   const [form, setForm] = useState({
     email:   '',
@@ -26,16 +25,19 @@ const Checkout = () => {
   useEffect(() => { fetchCart(); }, [fetchCart]);
 
   // Pre-fill form from logged-in customer
-  useEffect(() => {
-    if (customer) {
+useEffect(() => {
+  try {
+    const user = JSON.parse(localStorage.getItem('resellerUser') || 'null');
+    if (user) {
       setForm(prev => ({
         ...prev,
-        email: customer.email || prev.email,
-        phone: customer.phone || prev.phone,
-        name:  customer.name  || prev.name,
+        email: user.email || prev.email,
+        phone: user.phone || prev.phone,
+        name:  user.name  || prev.name,
       }));
     }
-  }, [customer]);
+  } catch { /* ignore malformed storage */ }
+}, []);
 
   const items    = cart?.items    || [];
   const subtotal = cart?.subtotal || 0;
