@@ -10,7 +10,7 @@ import AdminLogin         from './components/AdminLogin';
 import CategoryPage       from './components/CategoryPage';
 import ProductDescription from './components/ProductDescription';
 import Checkout           from './components/Checkout';
-import ResellerLogin      from './components/ResellerLogin';
+import Login from './components/Login'; 
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -23,6 +23,13 @@ const ResellerGuestRoute = ({ children }) => {
 const AdminGuestRoute = ({ children }) => {
   const token = localStorage.getItem('shree_admin_token');
   if (token) return <Navigate to="/admin" replace />;
+  return children;
+};
+const GuestRoute = ({ children }) => {
+  const loggedIn =
+    localStorage.getItem('resellerToken') ||
+    localStorage.getItem('shree_customer_token');
+  if (loggedIn) return <Navigate to="/" replace />;
   return children;
 };
 
@@ -38,14 +45,7 @@ function AppRoutes() {
         <Route path="/checkout"              element={<Checkout />} />
 
         {/* ── Reseller auth ──────────────────────────────────────────── */}
-        <Route
-          path="/reseller/login"
-          element={
-            <ResellerGuestRoute>
-              <ResellerLogin />
-            </ResellerGuestRoute>
-          }
-        />
+       <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
 
         {/* ── Admin auth ─────────────────────────────────────────────── */}
         <Route

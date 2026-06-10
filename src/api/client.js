@@ -11,18 +11,18 @@ const API_DEBUG = true; // Set to false to disable logging
 // ── Attach token automatically on every request ───────────────────────────────
 client.interceptors.request.use((config) => {
   const adminToken    = localStorage.getItem('shree_admin_token');
+  const resellerToken = localStorage.getItem('resellerToken');
   const customerToken = localStorage.getItem('shree_customer_token');
-  const sessionId     = localStorage.getItem('shree_session_id');
+  const sessionId     = localStorage.getItem('cartSessionId');
 
-  // Admin token takes priority — admin routes (upload, products, categories)
-  // need the admin JWT, not the customer JWT
-  const token = adminToken || customerToken;
+  // Priority: admin > reseller > customer
+  const token = adminToken || resellerToken || customerToken;
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  // Add session ID if customer is logged in
+  // Guest cart session — same key StoreContext uses
   if (sessionId) {
     config.headers['x-session-id'] = sessionId;
   }
@@ -32,13 +32,12 @@ client.interceptors.request.use((config) => {
     delete config.headers['Content-Type'];
   }
 
-  // Debug logging
   if (API_DEBUG) {
     console.log('📤 API Request:', {
       method: config.method?.toUpperCase(),
       url: config.baseURL + config.url,
       hasToken: !!token,
-      tokenType: adminToken ? 'admin' : (customerToken ? 'customer' : 'none'),
+      tokenType: adminToken ? 'admin' : resellerToken ? 'reseller' : customerToken ? 'customer' : 'none',
       hasSessionId: !!sessionId,
     });
   }
@@ -71,14 +70,12 @@ client.interceptors.response.use(
       });
     }
 
-    // If 401 on an admin route — clear admin token and redirect to admin login
+    // 401 on an admin route — clear admin token and redirect to admin login
     if (error.response?.status === 401) {
       const url = error.config?.url || '';
       const isAdminRoute =
         url.includes('/upload') ||
         url.includes('/categories') ||
-        url.includes('/products') ||
-        url.includes('/orders') ||
         url.includes('/discounts') ||
         url.includes('/stock-notify');
 
@@ -88,7 +85,11 @@ client.interceptors.response.use(
       }
     }
 
-    return Promise.reject(new Error(message));
+    // Preserve the backend error code (e.g. NOT_VERIFIED) for the login page
+    const err = new Error(message);
+    err.code   = error.response?.data?.code;
+    err.status = error.response?.status;
+    return Promise.reject(err);
   }
 );
 
@@ -101,22 +102,31 @@ export const adminLogout   = ()     => {
   localStorage.removeItem('shree_admin_token');
 };
 
-// ── Auth — Customer ───────────────────────────────────────────────────────────
-// ✅ All routes corrected to /customers/* (maps to backend modules/customer/)
-export const customerRegister    = (data) => client.post('/customers/register', data);
-export const customerLogin       = (data) => client.post('/customers/login', data);
-export const getMyProfile        = ()     => client.get('/customers/me');
-export const updateMyProfile     = (data) => client.put('/customers/me', data);
-export const changePassword      = (data) => client.put('/customers/me/change-password', data);
-export const verifyCustomerToken = ()     => client.get('/customers/me'); // 200 = token valid, 401 = expired
+// ── Auth — Unified identify (login page step 1) ───────────────────────────────
+export const identifyAccount = (email) => client.post('/auth/identify', { email });
 
-// ── Customer Orders ───────────────────────────────────────────────────────────
-export const getMyOrders    = ()        => client.get('/customers/orders');
-export const getMyOrderById = (orderId) => client.get(`/customers/orders/${orderId}`);
+// ── Auth — Customer (OTP flow) ────────────────────────────────────────────────
+export const customerRegister   = (data)       => client.post('/customers/register', data);
+export const customerRequestOtp = (email)      => client.post('/customers/request-otp', { email });
+export const customerVerifyOtp  = (email, otp) => client.post('/customers/verify-otp', { email, otp });
+export const customerLogout     = ()           => {
+  localStorage.removeItem('shree_customer_token');
+  localStorage.removeItem('shree_customer_user');
+};
 
-// ── Customer Addresses ────────────────────────────────────────────────────────
-export const addAddress    = (data)      => client.post('/customers/me/addresses', data);
-export const deleteAddress = (addressId) => client.delete(`/customers/me/addresses/${addressId}`);
+// ── Auth — Reseller ───────────────────────────────────────────────────────────
+export const resellerRegister = (data) => client.post('/resellers/register', data);
+export const resellerLogin    = (data) => client.post('/resellers/login', data);
+export const getResellerMe    = ()     => client.get('/resellers/me');
+export const resellerLogout   = ()     => {
+  localStorage.removeItem('resellerToken');
+  localStorage.removeItem('resellerUser');
+};
+
+// ── Admin — Reseller verification ─────────────────────────────────────────────
+export const fetchResellers = (params) => client.get('/resellers', { params });
+export const verifyReseller = (id)     => client.patch(`/resellers/${id}/verify`);
+export const rejectReseller = (id)     => client.patch(`/resellers/${id}/reject`);
 
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
@@ -157,14 +167,12 @@ export const getSubscribers     = (productId) =>
 
 // ── Orders ────────────────────────────────────────────────────────────────────
 export const createOrder       = (data)     => client.post('/orders', data);
-export const createDemoOrder   = (data)     => client.post('/orders/demo', data);
-export const verifyPayment     = (id)       => client.post(`/orders/${id}/verify-payment`);
 export const fetchOrders       = (params)   => client.get('/orders', { params });
 export const fetchOrderById    = (id)       => client.get(`/orders/${id}`);
 export const updateOrderStatus = (id, data) => client.patch(`/orders/${id}/status`, data);
 export const fetchOrderStats   = ()         => client.get('/orders/stats');
 
-// ── Upload — both use same endpoint, admin token handles auth ─────────────────
+// ── Upload ────────────────────────────────────────────────────────────────────
 export const uploadImage         = (formData) => client.post('/media/upload', formData);
 export const uploadCategoryImage = (formData) => client.post('/media/upload', formData);
 

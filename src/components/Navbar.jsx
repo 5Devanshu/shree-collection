@@ -5,7 +5,7 @@ import { adminLogout }                from '../api/client';
 import './Navbar.css';
 
 const Navbar = () => {
-  const { categories, cartCount } = useStore();
+  const { categories, cartCount, customer, logoutCustomer } = useStore();
   const navigate = useNavigate();
 
   // ── Dropdown state ────────────────────────────────────────────────────────
@@ -72,6 +72,11 @@ const Navbar = () => {
     setOpenDropdown(null);
     navigate('/');
   };
+  const handleCustomerLogout = () => {
+  logoutCustomer();
+  setOpenDropdown(null);
+  navigate('/');
+};
 
   const toggleDropdown = (name) => {
     setOpenDropdown(openDropdown === name ? null : name);
@@ -189,13 +194,32 @@ const Navbar = () => {
             </div>
           )}
 
-          {/* ── Nobody logged in — show Reseller Login ───────────────────── */}
-          {!isAdmin && !isResellerLoggedIn && (
-            <Link to="/reseller/login" className="nav-link label-md">
-              Reseller Login
-            </Link>
-          )}
+          {/* ── Customer is logged in ─────────────────────────────────────── */}
+{!isAdmin && !isResellerLoggedIn && customer && (
+  <div className="nav-dropdown" onClick={(e) => e.stopPropagation()}>
+    <span className="nav-link label-md nav-account-pill" style={{ cursor: 'pointer' }}
+      onClick={() => toggleDropdown('customer')}>
+      <span className="nav-account-dot" />
+      {customer.name?.split(' ')[0] || 'Account'}
+    </span>
+    <div className={`dropdown-content dropdown-content--right ${openDropdown === 'customer' ? 'active' : ''}`}>
+      <div className="dropdown-item label-md" style={{ color: 'var(--on-surface-variant)', cursor: 'default' }}>
+        {customer.email}
+      </div>
+      <div className="dropdown-divider" />
+      <button className="dropdown-item label-md dropdown-item--danger" onClick={handleCustomerLogout}>
+        Logout
+      </button>
+    </div>
+  </div>
+)}
 
+{/* ── Nobody logged in — unified Login ──────────────────────────── */}
+{!isAdmin && !isResellerLoggedIn && !customer && (
+  <Link to="/login" className="nav-link label-md">
+    Login
+  </Link>
+)}
           {/* ── Cart ─────────────────────────────────────────────────────── */}
           <Link to="/checkout" className="nav-link label-md">
             Cart

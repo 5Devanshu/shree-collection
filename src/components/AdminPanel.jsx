@@ -15,13 +15,7 @@ import AdminCategory      from './AdminCategory';
 import AdminOrders        from './AdminOrders';
 import AdminDiscounts     from './AdminDiscounts';
 
-// Temporary placeholder — replace with AdminResellers.jsx when built
-const AdminResellers = () => (
-  <div style={{ padding: '2rem' }}>
-    <h2>Resellers</h2>
-    <p>Reseller management coming soon.</p>
-  </div>
-);
+import AdminResellers from './AdminResellers';
 
 const AdminPanel = () => {
   const location = useLocation();

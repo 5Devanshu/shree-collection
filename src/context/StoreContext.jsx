@@ -25,14 +25,32 @@ const publicClient = axios.create({ baseURL: API });
 
 export const StoreProvider = ({ children }) => {
 
+  // ── Customer auth ──────────────────────────────────────────────────────────
+  const [customer, setCustomer] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('shree_customer_user') || 'null'); }
+    catch { return null; }
+  });
+
+  const loginCustomer = useCallback((token, user) => {
+    localStorage.setItem('shree_customer_token', token);
+    localStorage.setItem('shree_customer_user', JSON.stringify(user));
+    setCustomer(user);
+  }, []);
+
+  const logoutCustomer = useCallback(() => {
+    localStorage.removeItem('shree_customer_token');
+    localStorage.removeItem('shree_customer_user');
+    setCustomer(null);
+  }, []);
+
   // ── Cart ─────────────────────────────────────────────────────────────────
   const [cart,        setCart]        = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
   const [cartCount,   setCartCount]   = useState(0);
   const [cartLoading, setCartLoading] = useState(false);
 
   // ── Products & Categories ─────────────────────────────────────────────────
-  const [products,     setProducts]     = useState([]);   // ← [] not undefined
-  const [categories,   setCategories]   = useState([]);   // ← [] not undefined
+  const [products,     setProducts]     = useState([]);
+  const [categories,   setCategories]   = useState([]);
   const [loadingProds, setLoadingProds] = useState(true);
   const [loadingCats,  setLoadingCats]  = useState(true);
 
@@ -136,24 +154,30 @@ export const StoreProvider = ({ children }) => {
 
   // Load cart count on mount
   useEffect(() => { fetchCartCount(); }, [fetchCartCount]);
-  // Add this useEffect inside StoreProvider, after the existing mount useEffect
-useEffect(() => {
-  const handleVisible = () => {
-    if (document.visibilityState === 'visible') {
-      // Re-fetch products when user returns to the tab
-      publicClient.get('/products')
-        .then(res => {
-          const data = res.data?.products || res.data?.data || res.data || [];
-          setProducts(Array.isArray(data) ? data : []);
-        })
-        .catch(() => {});
-    }
-  };
-  document.addEventListener('visibilitychange', handleVisible);
-  return () => document.removeEventListener('visibilitychange', handleVisible);
-}, []);
+
+  // Re-fetch products when user returns to the tab
+  useEffect(() => {
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') {
+        publicClient.get('/products')
+          .then(res => {
+            const data = res.data?.products || res.data?.data || res.data || [];
+            setProducts(Array.isArray(data) ? data : []);
+          })
+          .catch(() => {});
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+    return () => document.removeEventListener('visibilitychange', handleVisible);
+  }, []);
+
   return (
     <StoreContext.Provider value={{
+      // Customer auth — used by Login, Navbar, Checkout
+      customer,
+      loginCustomer,
+      logoutCustomer,
+
       // Products & Categories — used by CategoryPage, FeaturedGrid, etc.
       products,
       categories,
