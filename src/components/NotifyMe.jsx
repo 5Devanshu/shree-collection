@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { useCustomer }     from '../context/CustomerContext';
+import { useStore } from '../context/StoreContext';
 import { subscribeToStock } from '../api/client';
 
 const NotifyMe = ({ productId }) => {
-  const { customer, isLoggedIn } = useCustomer();
-  const [email,     setEmail]    = useState(isLoggedIn ? customer.email : '');
+const { customer } = useStore();
+const [email,     setEmail]    = useState(customer?.email || '');
   const [submitted, setSubmitted]= useState(false);
   const [loading,   setLoading]  = useState(false);
   const [error,     setError]    = useState('');
