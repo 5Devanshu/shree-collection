@@ -10,7 +10,9 @@ import AdminLogin         from './components/AdminLogin';
 import CategoryPage       from './components/CategoryPage';
 import ProductDescription from './components/ProductDescription';
 import Checkout           from './components/Checkout';
-import Login from './components/Login'; 
+import Login              from './components/Login';
+import Footer             from './components/Footer';              // ← ADDED
+import TermsAndConditions from './components/TermsAndConditions';  // ← ADDED
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -25,6 +27,7 @@ const AdminGuestRoute = ({ children }) => {
   if (token) return <Navigate to="/admin" replace />;
   return children;
 };
+
 const GuestRoute = ({ children }) => {
   const loggedIn =
     localStorage.getItem('resellerToken') ||
@@ -43,9 +46,10 @@ function AppRoutes() {
         <Route path="/collections/:category" element={<CategoryPage />} />
         <Route path="/product/:id"           element={<ProductDescription />} />
         <Route path="/checkout"              element={<Checkout />} />
+        <Route path="/terms"                 element={<TermsAndConditions />} /> {/* ← ADDED */}
 
         {/* ── Reseller auth ──────────────────────────────────────────── */}
-       <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
+        <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
 
         {/* ── Admin auth ─────────────────────────────────────────────── */}
         <Route
@@ -63,6 +67,7 @@ function AppRoutes() {
         {/* ── Catch-all ──────────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <Footer /> {/* ← ADDED — after Routes so it sits below every page */}
     </div>
   );
 }
