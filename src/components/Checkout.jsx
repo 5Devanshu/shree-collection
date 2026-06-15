@@ -46,6 +46,7 @@ const Checkout = () => {
   }, []);
 
   const items    = cart?.items    || [];
+console.log('CART DEBUG:', cart, 'ITEMS:', items, 'FIRST ITEM:', items[0]);
   const subtotal = cart?.subtotal || 0;
   const total    = cart?.total    || 0;
 
