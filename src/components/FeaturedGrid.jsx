@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link }     from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import './FeaturedGrid.css';
+import ProductCard from './ProductCard';
 
 const FeaturedGrid = () => {
   const { products, categories, loadingProds } = useStore();
@@ -43,53 +44,34 @@ const FeaturedGrid = () => {
   return (
     <>
       {/* ── DESKTOP: Curated Pieces section ─────────────────────────────── */}
-      <section className="featured-section">
-        <div className="section-header">
-          <h2 className="headline-md">Curated Pieces</h2>
-          <Link to="/collections/all" className="view-all label-md">View All</Link>
-        </div>
-        <div className="product-grid">
-          {displayList.map((product, i) => {
-            const productId = product.id || product._id;
-            const imgSrc    = resolveImage(product);
-            const hasDiscount = product.discountEnabled && product.discountPercent > 0;
-            const displayPrice = hasDiscount ? product.discountedPrice : product.price;
-
-            return (
-              <div key={productId} className="product-card" style={{ animationDelay: `${i * 0.04}s` }}>
-                <div className="product-image-container">
-                  <Link to={`/product/${productId}`}>
-                    {imgSrc ? (
-                      <img src={imgSrc} alt={product.title} className="product-image" />
-                    ) : (
-                      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2.5rem', background:'var(--surface-container-low)' }}>💎</div>
-                    )}
-                  </Link>
-                  {hasDiscount && (
-                    <div style={{ position:'absolute', top:10, left:10, background:'var(--primary)', color:'#fff', fontSize:'0.65rem', fontWeight:700, padding:'3px 8px', letterSpacing:'0.06em' }}>
-                      {product.discountPercent}% OFF
-                    </div>
-                  )}
-                </div>
-                <div className="product-details">
-                  <Link to={`/product/${productId}`} style={{ textDecoration:'none' }}>
-                    <h3 className="title">{product.title}</h3>
-                  </Link>
-                  {product.material && <p className="material">{product.material}</p>}
-                  {hasDiscount ? (
-                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:'var(--spacing-2)', flexWrap:'wrap' }}>
-                      <span className="discounted-price">₹{Number(displayPrice).toLocaleString('en-IN')}</span>
-                      <span className="original-price">₹{Number(product.price).toLocaleString('en-IN')}</span>
-                    </div>
-                  ) : (
-                    <p className="price">₹{Number(product.price).toLocaleString('en-IN')}</p>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </section>
+      // In the desktop section replace the inline card with:
+<section className="featured-section">
+  <div className="section-header">
+    <h2 className="headline-md">Curated Pieces</h2>
+    <Link to="/collections/all" className="view-all label-md">View All</Link>
+  </div>
+  <div className="product-grid">
+    {displayList.map((product, i) => {
+      const productId = product.id || product._id;
+      return (
+        <ProductCard
+          key={productId}
+          id={productId}
+          title={product.title}
+          material={product.material}
+          price={product.price}
+          discountEnabled={product.discountEnabled}
+          discountedPrice={product.discountedPrice}
+          discountPercent={product.discountPercent}
+          imageUrl={product.imageUrl}
+          image={product.image}
+          stock={product.stock}
+          delay={i * 0.04}
+        />
+      );
+    })}
+  </div>
+</section>
 
       {/* ── MOBILE: scrollable grid with category chips ──────────────────── */}
       <section className="mobile-home">
