@@ -130,22 +130,7 @@
 .mpc-price { font-size: 0.9rem; font-weight: 700; color: var(--primary); }
 .mpc-original-price { font-size: 0.75rem; color: #aaa; text-decoration: line-through; }
 
-/* Sale banner */
-.sale-banner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 16px;
-  padding: 20px;
-  background: linear-gradient(135deg, var(--primary), #a08800);
-  border-radius: 16px;
-  color: #fff;
-}
-.sale-label { font-size: 0.75rem; font-weight: 600; opacity: 0.85; display: block; }
-.sale-title { font-size: 1.6rem; font-weight: 800; margin: 2px 0; }
-.sale-sub { font-size: 0.78rem; opacity: 0.85; margin: 0; }
-.sale-discount { font-size: 1.1rem; font-weight: 700; margin: 4px 0 0; }
-.sale-banner-deco { font-size: 2.5rem; }
+
 
 /* Category chips */
 .category-scroll {

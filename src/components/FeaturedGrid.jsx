@@ -75,15 +75,7 @@ const FeaturedGrid = () => {
 
       {/* ── MOBILE: scrollable grid with category chips ──────────────────── */}
       <section className="mobile-home">
-        <div className="sale-banner">
-          <div className="sale-banner-text">
-            <span className="sale-label">Shree Collection</span>
-            <h2 className="sale-title">BIG SALE</h2>
-            <p className="sale-sub">Only On This Week</p>
-            <p className="sale-discount">50% OFF</p>
-          </div>
-          <div className="sale-banner-deco">💍</div>
-        </div>
+        
 
         <div className="category-scroll">
           <button className={`cat-chip ${active === 'all' ? 'active' : ''}`} onClick={() => setActive('all')}>All</button>
