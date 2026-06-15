@@ -19,8 +19,8 @@ const AdminLogin = () => {
     setLoading(true);
     try {
       const { data } = await axios.post(`${API}/auth/login`, form);
-      localStorage.setItem('adminToken', data.token);
-      localStorage.setItem('adminUser',  JSON.stringify(data.admin));
+      localStorage.setItem('shree_admin_token', data.token);
+      localStorage.setItem('shree_admin_user',  JSON.stringify(data.admin));
       navigate('/admin');
     } catch (err) {
       setError(err.response?.data?.message || 'Login failed');
