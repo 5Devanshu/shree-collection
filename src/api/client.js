@@ -106,30 +106,29 @@ export const adminLogout   = ()     => {
 export const identifyAccount = (email) => client.post('/auth/identify', { email });
 
 // ── Auth — Customer (OTP flow) ────────────────────────────────────────────────
-export const customerRegister   = (data)       => client.post('/customers/register', data);
-export const customerRequestOtp = (email)      => client.post('/customers/request-otp', { email });
-export const customerVerifyOtp  = (email, otp) => client.post('/customers/verify-otp', { email, otp });
-export const customerLogout     = ()           => {
-  localStorage.removeItem('shree_customer_token');
-  localStorage.removeItem('shree_customer_user');
-};
+// ── Auth — Customer ───────────────────────────────────────────────────────────
+export const customerRegister    = (data)              => client.post('/customers/register', data);
+export const customerLoginPassword = (data)            => client.post('/customers/login', data);
+export const customerRequestOtp  = (identifier)        => client.post('/customers/request-otp', { identifier });
+export const customerVerifyOtp   = (identifier, otp)   => client.post('/customers/verify-otp', { identifier, otp });
+
 
 // ── Auth — Reseller ───────────────────────────────────────────────────────────
-export const resellerRegister = (data) => client.post('/resellers/register', data);
-export const resellerLogin    = (data) => client.post('/resellers/login', data);
+export const resellerRegister    = (data)              => client.post('/resellers/register', data);
+export const resellerLogin       = (data)              => client.post('/resellers/login', data);
 export const getResellerMe    = ()     => client.get('/resellers/me');
 export const resellerLogout   = ()     => {
   localStorage.removeItem('resellerToken');
   localStorage.removeItem('resellerUser');
 };
 
+
 // ── Admin — Reseller verification ─────────────────────────────────────────────
 export const fetchResellers = (params) => client.get('/resellers', { params });
 export const verifyReseller = (id)     => client.patch(`/resellers/${id}/verify`);
 export const rejectReseller = (id)     => client.patch(`/resellers/${id}/reject`);
-
-export const resellerRequestOtp = (email)      => client.post('/resellers/otp/request', { email });
-export const resellerVerifyOtp  = (email, otp) => client.post('/resellers/otp/verify',  { email, otp });
+export const resellerRequestOtp  = (identifier)        => client.post('/resellers/otp/request', { identifier });
+export const resellerVerifyOtp   = (identifier, otp)   => client.post('/resellers/otp/verify',  { identifier, otp });
 
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
