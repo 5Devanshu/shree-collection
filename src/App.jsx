@@ -13,6 +13,7 @@ import Checkout           from './components/Checkout';
 import Login              from './components/Login';
 import Footer             from './components/Footer';              // ← ADDED
 import TermsAndConditions from './components/TermsAndConditions';  // ← ADDED
+import CustomerProfile from './components/CustomerProfile';
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -66,6 +67,7 @@ function AppRoutes() {
 
         {/* ── Catch-all ──────────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to="/" replace />} />
+        <Route path="/profile" element={<CustomerProfile />} />
       </Routes>
       <Footer /> {/* ← ADDED — after Routes so it sits below every page */}
     </div>

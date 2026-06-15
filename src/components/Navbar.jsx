@@ -204,8 +204,12 @@ const Navbar = () => {
     </span>
     <div className={`dropdown-content dropdown-content--right ${openDropdown === 'customer' ? 'active' : ''}`}>
       <div className="dropdown-item label-md" style={{ color: 'var(--on-surface-variant)', cursor: 'default' }}>
-        {customer.email}
+        {customer.email || customer.phone || customer.username}
       </div>
+      <div className="dropdown-divider" />
+      <Link to="/profile" className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>
+        My Profile
+      </Link>
       <div className="dropdown-divider" />
       <button className="dropdown-item label-md dropdown-item--danger" onClick={handleCustomerLogout}>
         Logout

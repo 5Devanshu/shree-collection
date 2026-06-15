@@ -187,3 +187,8 @@ export const confirmPhonePePayment = (data) =>
 
 export const checkPhonePePaymentStatus = (merchantTransactionId) =>
   client.get(`/payment/phonepe/status/${merchantTransactionId}`);
+
+// ── Customer profile ──────────────────────────────────────────────────────────
+export const getCustomerMe          = ()     => client.get('/customers/me');
+export const updateCustomerMe       = (data) => client.patch('/customers/me', data);
+export const changeCustomerPassword = (data) => client.post('/customers/change-password', data);
