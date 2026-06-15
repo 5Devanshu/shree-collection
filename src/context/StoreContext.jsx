@@ -102,18 +102,23 @@ export const StoreProvider = ({ children }) => {
   }, []);
 
   // ── Cart: add ─────────────────────────────────────────────────────────────
-  const addToCart = useCallback(async (productId, quantity = 1) => {
-    try {
-      const res = await cartClient.post('/cart/add', { productId, quantity });
-      if (res.data.success) {
-        setCart(res.data.cart);
-        setCartCount(res.data.count || 0);
-      }
-      return res.data;
-    } catch (err) {
-      throw err?.response?.data || err;
+const addToCart = useCallback(async (productOrId, quantity = 1) => {
+  try {
+    // Accept either a full product object or a plain ID string
+    const productId = productOrId && typeof productOrId === 'object'
+      ? (productOrId.id || productOrId._id)
+      : productOrId;
+
+    const res = await cartClient.post('/cart/add', { productId, quantity });
+    if (res.data.success) {
+      setCart(res.data.cart);
+      setCartCount(res.data.count || 0);
     }
-  }, []);
+    return res.data;
+  } catch (err) {
+    throw err?.response?.data || err;
+  }
+}, []);
 
   // ── Cart: update quantity ─────────────────────────────────────────────────
   const updateCartItem = useCallback(async (productId, quantity) => {
