@@ -53,20 +53,24 @@ const FeaturedGrid = () => {
     {displayList.map((product, i) => {
       const productId = product.id || product._id;
       return (
-        <ProductCard
-          key={productId}
-          id={productId}
-          title={product.title}
-          material={product.material}
-          price={product.price}
-          discountEnabled={product.discountEnabled}
-          discountedPrice={product.discountedPrice}
-          discountPercent={product.discountPercent}
-          imageUrl={product.imageUrl}
-          image={product.image}
-          stock={product.stock}
-          delay={i * 0.04}
-        />
+        // In FeaturedGrid desktop section, ProductCard render:
+<ProductCard
+  key={productId}
+  id={productId}
+  title={product.title}
+  material={product.material}
+  price={product.price}
+  resellerPrice={product.resellerPrice}      // ← add
+  displayPrice={product.displayPrice}         // ← add
+  isResellerPrice={product.isResellerPrice}   // ← add
+  discountEnabled={product.discountEnabled}
+  discountedPrice={product.discountedPrice}
+  discountPercent={product.discountPercent}
+  imageUrl={product.imageUrl}
+  image={product.image}
+  stock={product.stock}
+  delay={i * 0.04}
+/>
       );
     })}
   </div>

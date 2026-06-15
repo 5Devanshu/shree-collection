@@ -10,7 +10,7 @@ const RING_SIZES = [4, 4.5, 5, 5.5, 6, 6.6, 7, 7.7, 8, 8.8];
 const ProductDescription = () => {
   const { id }    = useParams();
   const navigate  = useNavigate();
-  const { addToCart, categories } = useStore();
+  const { addToCart, categories, isReseller } = useStore();
 
   const [product,      setProduct]      = useState(null);
   const [loading,      setLoading]      = useState(true);
@@ -47,7 +47,6 @@ const ProductDescription = () => {
     return () => window.removeEventListener('keydown', handleKey);
   }, [product, loading]);
 
-  // ── Helpers ───────────────────────────────────────────────────────────────
   const buildImages = (p) => [
     ...(p.imageUrl ? [p.imageUrl] : []),
     ...(p.image    ? [typeof p.image === 'string' ? p.image : p.image?.url] : []),
@@ -73,17 +72,29 @@ const ProductDescription = () => {
     </div>
   );
 
-  // ── Resolved values ───────────────────────────────────────────────────────
-  const productId    = product.id || product._id;
-  const allImages    = buildImages(product);
-  const hasDiscount  = product.discountEnabled && product.discountPercent > 0;
-  const displayPrice = hasDiscount ? product.discountedPrice : product.price;
-  const outOfStock   = product.stock === 0;
-  const category     = (Array.isArray(categories) ? categories : [])
+  // ── Price resolution ──────────────────────────────────────────────────────
+  const productId        = product.id || product._id;
+  const allImages        = buildImages(product);
+  const numericPrice     = parseFloat(product.price)        || 0;
+  const numericReseller  = parseFloat(product.resellerPrice) || 0;
+  const numericDiscounted = parseFloat(product.discountedPrice) || 0;
+
+  // Reseller price takes priority if logged in as reseller and price is set
+  const showResellerPrice = isReseller && numericReseller > 0;
+  const hasDiscount       = !showResellerPrice && product.discountEnabled && product.discountPercent > 0;
+
+  const displayPrice = showResellerPrice
+    ? numericReseller
+    : hasDiscount
+      ? numericDiscounted
+      : numericPrice;
+
+  const outOfStock = product.stock === 0;
+  const category   = (Array.isArray(categories) ? categories : [])
     .find(c => c.slug === product.categorySlug || c.id === product.categoryId);
-  const isRingType   = product.category?.name?.toLowerCase().includes('ring') ||
-                       category?.name?.toLowerCase().includes('ring') ||
-                       product.categorySlug?.includes('ring');
+  const isRingType = product.category?.name?.toLowerCase().includes('ring') ||
+                     category?.name?.toLowerCase().includes('ring') ||
+                     product.categorySlug?.includes('ring');
 
   const prev = () => setActiveImg(i => (i - 1 + allImages.length) % allImages.length);
   const next = () => setActiveImg(i => (i + 1) % allImages.length);
@@ -109,7 +120,49 @@ const ProductDescription = () => {
     navigate('/checkout');
   };
 
-  // ── Shared specs block ────────────────────────────────────────────────────
+  // ── Price block — shared desktop + mobile ────────────────────────────────
+  const PriceBlock = ({ mobile = false }) => {
+    const priceClass   = mobile ? 'mpd-price'          : 'headline-md price';
+    const rowClass     = mobile ? 'mpd-price-row'      : 'pd-price-row';
+    const origClass    = mobile ? 'mpd-original-price' : 'pd-original-price';
+    const pillClass    = mobile ? 'mpd-discount-pill'  : '';
+
+    if (showResellerPrice) return (
+      <div className={rowClass} style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+        <span className={priceClass} style={{ color: '#2e7d32' }}>
+          ₹{numericReseller.toLocaleString('en-IN')}
+        </span>
+        <span className={origClass}>
+          ₹{numericPrice.toLocaleString('en-IN')}
+        </span>
+        <span style={{ fontSize: '0.7rem', color: '#2e7d32', fontWeight: 700,
+          letterSpacing: '0.08em', padding: '2px 8px', background: '#f0fdf4',
+          border: '1px solid #bbf7d0', borderRadius: 4 }}>
+          RESELLER PRICE
+        </span>
+      </div>
+    );
+
+    if (hasDiscount) return (
+      <div className={rowClass}>
+        <span className={mobile ? 'mpd-price' : 'headline-md'} style={{ color: 'var(--primary)' }}>
+          ₹{numericDiscounted.toLocaleString('en-IN')}
+        </span>
+        <span className={origClass}>
+          ₹{numericPrice.toLocaleString('en-IN')}
+        </span>
+        {mobile && <span className={pillClass}>{product.discountPercent}% OFF</span>}
+      </div>
+    );
+
+    return (
+      <p className={priceClass}>
+        ₹{numericPrice.toLocaleString('en-IN')}
+      </p>
+    );
+  };
+
+  // ── Specs block ───────────────────────────────────────────────────────────
   const SpecsBlock = ({ className = '' }) => (
     (product.sku || product.colour || product.plating || product.stoneType || product.sizes?.length > 0) ? (
       <div className={`product-details-list ${className}`} style={{ marginTop: '1rem' }}>
@@ -146,7 +199,12 @@ const ProductDescription = () => {
             ) : (
               <div className="product-image-placeholder">💎</div>
             )}
-            {hasDiscount && <div className="product-discount-badge">{product.discountPercent}% OFF</div>}
+            {hasDiscount && !showResellerPrice && (
+              <div className="product-discount-badge">{product.discountPercent}% OFF</div>
+            )}
+            {showResellerPrice && (
+              <div className="product-discount-badge" style={{ background: '#2e7d32' }}>RESELLER</div>
+            )}
             {allImages.length > 1 && (
               <>
                 <button className="gallery-arrow gallery-arrow--prev" onClick={prev}>‹</button>
@@ -193,14 +251,7 @@ const ProductDescription = () => {
             <h1 className="display-lg title">{product.title}</h1>
             {product.material && <p className="label-md material">{product.material}</p>}
 
-            {hasDiscount ? (
-              <div className="pd-price-row">
-                <p className="headline-md" style={{ color: 'var(--primary)' }}>₹{Number(displayPrice).toLocaleString('en-IN')}</p>
-                <p className="pd-original-price">₹{Number(product.price).toLocaleString('en-IN')}</p>
-              </div>
-            ) : (
-              <p className="headline-md price">₹{Number(product.price).toLocaleString('en-IN')}</p>
-            )}
+            <PriceBlock />
 
             <div className="pd-stock">
               {product.stock > 5
@@ -210,7 +261,9 @@ const ProductDescription = () => {
                   : <span className="status-badge status-pending">Out of Stock</span>}
             </div>
 
-            {product.description && <p className="product-description body-lg">{product.description}</p>}
+            {product.description && (
+              <p className="product-description body-lg">{product.description}</p>
+            )}
 
             {product.details?.length > 0 && (
               <div className="product-details-list">
@@ -250,7 +303,12 @@ const ProductDescription = () => {
           ) : (
             <div className="mpd-placeholder">💎</div>
           )}
-          {hasDiscount && <div className="product-discount-badge">{product.discountPercent}% OFF</div>}
+          {hasDiscount && !showResellerPrice && (
+            <div className="product-discount-badge">{product.discountPercent}% OFF</div>
+          )}
+          {showResellerPrice && (
+            <div className="product-discount-badge" style={{ background: '#2e7d32' }}>RESELLER</div>
+          )}
           {allImages.length > 1 && (
             <>
               <button className="mpd-arrow mpd-arrow-l" onClick={prev}>‹</button>
@@ -273,15 +331,7 @@ const ProductDescription = () => {
             {product.isFeatured && <span className="mpd-tag">Hot</span>}
           </div>
 
-          {hasDiscount ? (
-            <div className="mpd-price-row">
-              <span className="mpd-price">₹{Number(displayPrice).toLocaleString('en-IN')}</span>
-              <span className="mpd-original-price">₹{Number(product.price).toLocaleString('en-IN')}</span>
-              <span className="mpd-discount-pill">{product.discountPercent}% OFF</span>
-            </div>
-          ) : (
-            <p className="mpd-price">₹{Number(product.price).toLocaleString('en-IN')}</p>
-          )}
+          <PriceBlock mobile />
 
           <div className="mpd-stock">
             {product.stock > 5
