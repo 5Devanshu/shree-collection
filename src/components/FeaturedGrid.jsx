@@ -44,7 +44,6 @@ const FeaturedGrid = () => {
   return (
     <>
       {/* ── DESKTOP: Curated Pieces section ─────────────────────────────── */}
-      // In the desktop section replace the inline card with:
 <section className="featured-section">
   <div className="section-header">
     <h2 className="headline-md">Curated Pieces</h2>
