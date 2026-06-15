@@ -268,14 +268,14 @@ let list = isAll
               All Pieces
             </Link>
             {categories.map(c => (
-              <Link
-                key={c._id}
-                to={`/collections/${c.slug}`}
-                className={`filter-link label-md ${c.slug === category ? 'filter-link-active' : ''}`}
-              >
-                {c.name}
-              </Link>
-            ))}
+  <Link
+    key={c.id}
+    to={`/collections/${c.slug}`}
+    className={`filter-link label-md ${c.slug === category ? 'filter-link-active' : ''}`}
+  >
+    {c.name}
+  </Link>
+))}
           </div>
 
         </aside>
@@ -345,11 +345,7 @@ let list = isAll
           ) : (
             <section className="category-grid">
               {displayed.map((product, i) => (
-                <ProductCard
-                  key={product._id}
-                  {...product}
-                  delay={i * 0.04}
-                />
+                <ProductCard key={product.id} {...product} delay={i * 0.04} />
               ))}
             </section>
           )}
