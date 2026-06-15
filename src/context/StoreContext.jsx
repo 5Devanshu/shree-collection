@@ -51,7 +51,7 @@ export const StoreProvider = ({ children }) => {
     catch { return null; }
   });
 
-  const isReseller = !!localStorage.getItem('resellerToken');
+  const [isReseller, setIsReseller] = useState(() => !!localStorage.getItem('resellerToken'));
 
   // ── Cart ──────────────────────────────────────────────────────────────────
   const [cart,        setCart]        = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
@@ -65,16 +65,16 @@ export const StoreProvider = ({ children }) => {
   const [loadingCats,  setLoadingCats]  = useState(true);
 
   // Fetch products — use auth client if reseller so backend returns resellerPrice
-  const fetchProducts = useCallback(() => {
-    const client = isReseller ? cartClient : publicClient;
-    client.get('/products')
-      .then(res => {
-        const data = res.data?.products || res.data?.data || res.data || [];
-        setProducts(Array.isArray(data) ? data : []);
-      })
-      .catch(() => setProducts([]))
-      .finally(() => setLoadingProds(false));
-  }, [isReseller]);
+const fetchProducts = useCallback(() => {
+  // cartClient interceptor attaches resellerToken/customerToken automatically
+  cartClient.get('/products')
+    .then(res => {
+      const data = res.data?.products || res.data?.data || res.data || [];
+      setProducts(Array.isArray(data) ? data : []);
+    })
+    .catch(() => setProducts([]))
+    .finally(() => setLoadingProds(false));
+}, []);
 
   useEffect(() => {
     publicClient.get('/categories')
