@@ -128,6 +128,9 @@ export const fetchResellers = (params) => client.get('/resellers', { params });
 export const verifyReseller = (id)     => client.patch(`/resellers/${id}/verify`);
 export const rejectReseller = (id)     => client.patch(`/resellers/${id}/reject`);
 
+export const resellerRequestOtp = (email)      => client.post('/resellers/otp/request', { email });
+export const resellerVerifyOtp  = (email, otp) => client.post('/resellers/otp/verify',  { email, otp });
+
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
 export const createCategory   = (data)       => client.post('/categories', data);

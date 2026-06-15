@@ -2,25 +2,34 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import {
-  identifyAccount, customerRequestOtp, customerVerifyOtp, customerRegister,
-  resellerLogin, resellerRegister,
+  identifyAccount,
+  customerRequestOtp, customerVerifyOtp, customerRegister,
+  resellerLogin, resellerRegister, resellerRequestOtp, resellerVerifyOtp,
 } from '../api/client';
 import './CustomerAuth.css';
 
-// Steps: email → (customer-otp | reseller-password | register-choice
-//        → register-customer | register-reseller) → done
+// Steps:
+// email → signin-choice (existing account)
+//       → customer-otp (OTP verify)
+//       → reseller-password (password login)
+//       → reseller-otp (OTP verify for reseller)
+//       → register-choice (no account)
+//       → register-customer → customer-otp
+//       → register-reseller → reseller-pending
+
 const Login = () => {
   const navigate = useNavigate();
   const { loginCustomer } = useStore();
 
-  const [step,    setStep]    = useState('email');
-  const [email,   setEmail]   = useState('');
-  const [otp,     setOtp]     = useState('');
+  const [step,     setStep]     = useState('email');
+  const [email,    setEmail]    = useState('');
+  const [otp,      setOtp]      = useState('');
   const [password, setPassword] = useState('');
-  const [reg,     setReg]     = useState({ name: '', phone: '', company: '', password: '' });
-  const [error,   setError]   = useState('');
-  const [info,    setInfo]    = useState('');
-  const [loading, setLoading] = useState(false);
+  const [accountType, setAccountType] = useState(''); // 'customer' | 'reseller'
+  const [reg,      setReg]      = useState({ name: '', phone: '', company: '', password: '' });
+  const [error,    setError]    = useState('');
+  const [info,     setInfo]     = useState('');
+  const [loading,  setLoading]  = useState(false);
 
   const run = async (fn) => {
     setError(''); setInfo(''); setLoading(true);
@@ -29,69 +38,103 @@ const Login = () => {
     finally { setLoading(false); }
   };
 
-  // ── Step 1: identify the email ──────────────────────────────────────────────
+  const backToEmail = () => {
+    setStep('email'); setOtp(''); setPassword('');
+    setError(''); setInfo(''); setAccountType('');
+  };
+
+  // ── Step 1: identify ────────────────────────────────────────────────────────
   const handleEmailSubmit = (e) => {
     e.preventDefault();
     run(async () => {
       const res = await identifyAccount(email.trim().toLowerCase());
       const { type, status } = res.data;
 
-      if (type === 'customer') {
-        await customerRequestOtp(email);
-        setInfo(`We've sent a 6-digit code to ${email}.`);
-        setStep('customer-otp');
-      } else if (type === 'reseller') {
+      if (type === 'reseller') {
         if (status === 'pending') {
           setError('Your reseller account is awaiting admin verification. You\'ll receive an email once verified.');
-        } else if (status === 'rejected') {
-          setError('Your reseller application was not approved. Please contact us for details.');
-        } else {
-          setStep('reseller-password');
+          return;
         }
+        if (status === 'rejected') {
+          setError('Your reseller application was not approved. Please contact us for details.');
+          return;
+        }
+        setAccountType('reseller');
+        setStep('signin-choice');
+      } else if (type === 'customer') {
+        setAccountType('customer');
+        setStep('signin-choice');
       } else {
         setStep('register-choice');
       }
     });
   };
 
-  // ── Customer: verify OTP ────────────────────────────────────────────────────
-  const handleOtpSubmit = (e) => {
-    e.preventDefault();
+  // ── Step 2: sign-in choice — send OTP ───────────────────────────────────────
+  const handleSendOtp = () => {
     run(async () => {
-      const res = await customerVerifyOtp(email.trim().toLowerCase(), otp.trim());
-      loginCustomer(res.data.token, res.data.customer);
-      navigate('/');
+      if (accountType === 'customer') {
+        await customerRequestOtp(email.trim().toLowerCase());
+      } else {
+        await resellerRequestOtp(email.trim().toLowerCase());
+      }
+      setInfo(`We've sent a 6-digit code to ${email}.`);
+      setOtp('');
+      setStep('otp-verify');
     });
   };
 
-  const handleResendOtp = () =>
-    run(async () => {
-      await customerRequestOtp(email);
-      setInfo('A new code has been sent.');
-    });
-
-  // ── Reseller: password login ────────────────────────────────────────────────
-  const handleResellerSubmit = (e) => {
+  // ── Step 2: sign-in choice — password (reseller only) ───────────────────────
+  const handleResellerPasswordSubmit = (e) => {
     e.preventDefault();
     run(async () => {
       const res = await resellerLogin({ email: email.trim().toLowerCase(), password });
       localStorage.setItem('resellerToken', res.data.token);
       localStorage.setItem('resellerUser',  JSON.stringify(res.data.reseller));
-      window.location.href = '/';   // full reload so Navbar picks up reseller state
+      window.location.href = '/';
     });
   };
 
-  // ── New customer registration → OTP ─────────────────────────────────────────
+  // ── OTP verify — works for both customer and reseller ───────────────────────
+  const handleOtpSubmit = (e) => {
+    e.preventDefault();
+    run(async () => {
+      if (accountType === 'customer') {
+        const res = await customerVerifyOtp(email.trim().toLowerCase(), otp.trim());
+        loginCustomer(res.data.token, res.data.customer);
+        navigate('/');
+      } else {
+        const res = await resellerVerifyOtp(email.trim().toLowerCase(), otp.trim());
+        localStorage.setItem('resellerToken', res.data.token);
+        localStorage.setItem('resellerUser',  JSON.stringify(res.data.reseller));
+        window.location.href = '/';
+      }
+    });
+  };
+
+  const handleResendOtp = () =>
+    run(async () => {
+      if (accountType === 'customer') {
+        await customerRequestOtp(email.trim().toLowerCase());
+      } else {
+        await resellerRequestOtp(email.trim().toLowerCase());
+      }
+      setInfo('A new code has been sent.');
+    });
+
+  // ── New customer registration ────────────────────────────────────────────────
   const handleCustomerRegister = (e) => {
     e.preventDefault();
     run(async () => {
       await customerRegister({ name: reg.name, email: email.trim().toLowerCase(), phone: reg.phone });
+      setAccountType('customer');
       setInfo(`Account created — we've sent a 6-digit code to ${email}.`);
-      setStep('customer-otp');
+      setOtp('');
+      setStep('otp-verify');
     });
   };
 
-  // ── New reseller application → pending ──────────────────────────────────────
+  // ── New reseller application ─────────────────────────────────────────────────
   const handleResellerRegister = (e) => {
     e.preventDefault();
     run(async () => {
@@ -104,13 +147,12 @@ const Login = () => {
   };
 
   const handleRegChange = (e) => setReg(prev => ({ ...prev, [e.target.name]: e.target.value }));
-  const backToEmail = () => { setStep('email'); setOtp(''); setPassword(''); setError(''); setInfo(''); };
 
   return (
     <div className="auth-page">
       <div className="auth-container">
 
-        {/* ── Step: email ─────────────────────────────────────────────────── */}
+        {/* ── email ─────────────────────────────────────────────────────────── */}
         {step === 'email' && (
           <>
             <h1 className="display-sm">Login</h1>
@@ -126,8 +168,59 @@ const Login = () => {
           </>
         )}
 
-        {/* ── Step: customer OTP ──────────────────────────────────────────── */}
-        {step === 'customer-otp' && (
+        {/* ── signin-choice ─────────────────────────────────────────────────── */}
+        {step === 'signin-choice' && (
+          <>
+            <h1 className="display-sm">Sign In</h1>
+            <p className="body-md auth-subtitle">{email}</p>
+            {error && <p className="auth-error">{error}</p>}
+            {info  && <p className="auth-info">{info}</p>}
+            <div className="auth-form">
+
+              {/* Password — reseller only */}
+              {accountType === 'reseller' && (
+                <form onSubmit={handleResellerPasswordSubmit} style={{ width: '100%' }}>
+                  <input className="auth-input" type="password" placeholder="Password"
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    required autoFocus style={{ marginBottom: '12px' }} />
+                  <button className="btn-primary auth-submit-btn" type="submit" disabled={loading}>
+                    {loading ? 'Signing In…' : 'Sign In with Password'}
+                  </button>
+                </form>
+              )}
+
+              {/* Divider */}
+              {accountType === 'reseller' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', margin: '8px 0', width: '100%' }}>
+                  <hr style={{ flex: 1, border: 'none', borderTop: '1px solid var(--outline)' }} />
+                  <span className="body-sm" style={{ color: 'var(--on-surface-variant)' }}>or</span>
+                  <hr style={{ flex: 1, border: 'none', borderTop: '1px solid var(--outline)' }} />
+                </div>
+              )}
+
+              {/* OTP — both customer and reseller */}
+              <button className="btn-primary auth-submit-btn"
+                style={accountType === 'reseller' ? {
+                  background: 'transparent',
+                  color: 'var(--primary)',
+                  border: '1px solid var(--primary)',
+                } : {}}
+                onClick={handleSendOtp} disabled={loading}>
+                {loading ? 'Sending…' : 'Send OTP to Email'}
+              </button>
+
+            </div>
+            <p className="auth-footer">
+              <button type="button" onClick={backToEmail}
+                style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
+                Change email
+              </button>
+            </p>
+          </>
+        )}
+
+        {/* ── otp-verify (customer + reseller shared) ───────────────────────── */}
+        {step === 'otp-verify' && (
           <>
             <h1 className="display-sm">Enter Code</h1>
             <p className="body-md auth-subtitle">{info || `We've sent a 6-digit code to ${email}.`}</p>
@@ -148,46 +241,22 @@ const Login = () => {
                 Resend code
               </button>
               {' · '}
-              <button type="button" onClick={backToEmail}
+              <button type="button" onClick={() => setStep('signin-choice')}
                 style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
-                Change email
+                Back
               </button>
             </p>
           </>
         )}
 
-        {/* ── Step: reseller password ─────────────────────────────────────── */}
-        {step === 'reseller-password' && (
-          <>
-            <h1 className="display-sm">Reseller Login</h1>
-            <p className="body-md auth-subtitle">Welcome back — enter your password.</p>
-            {error && <p className="auth-error">{error}</p>}
-            <form className="auth-form" onSubmit={handleResellerSubmit}>
-              <input className="auth-input" type="email" value={email} disabled />
-              <input className="auth-input" type="password" placeholder="Password"
-                value={password} onChange={(e) => setPassword(e.target.value)} required autoFocus />
-              <button className="btn-primary auth-submit-btn" type="submit" disabled={loading}>
-                {loading ? 'Signing In…' : 'Sign In'}
-              </button>
-            </form>
-            <p className="auth-footer">
-              <button type="button" onClick={backToEmail}
-                style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer' }}>
-                Change email
-              </button>
-            </p>
-          </>
-        )}
-
-        {/* ── Step: no account — choose type ──────────────────────────────── */}
+        {/* ── register-choice ───────────────────────────────────────────────── */}
         {step === 'register-choice' && (
           <>
             <h1 className="display-sm">Create Account</h1>
             <p className="body-md auth-subtitle">No account found for {email}. How would you like to join?</p>
             {error && <p className="auth-error">{error}</p>}
             <div className="auth-form">
-              <button className="btn-primary auth-submit-btn"
-                onClick={() => setStep('register-customer')}>
+              <button className="btn-primary auth-submit-btn" onClick={() => setStep('register-customer')}>
                 Shop as a Customer
               </button>
               <button className="btn-primary auth-submit-btn"
@@ -205,7 +274,7 @@ const Login = () => {
           </>
         )}
 
-        {/* ── Step: register customer ─────────────────────────────────────── */}
+        {/* ── register-customer ─────────────────────────────────────────────── */}
         {step === 'register-customer' && (
           <>
             <h1 className="display-sm">Customer Account</h1>
@@ -224,7 +293,7 @@ const Login = () => {
           </>
         )}
 
-        {/* ── Step: register reseller ─────────────────────────────────────── */}
+        {/* ── register-reseller ─────────────────────────────────────────────── */}
         {step === 'register-reseller' && (
           <>
             <h1 className="display-sm">Reseller Application</h1>
@@ -249,13 +318,13 @@ const Login = () => {
           </>
         )}
 
-        {/* ── Step: reseller application submitted ────────────────────────── */}
+        {/* ── reseller-pending ──────────────────────────────────────────────── */}
         {step === 'reseller-pending' && (
           <>
             <h1 className="display-sm">Application Received ✓</h1>
             <p className="body-md auth-subtitle">
               Thank you! Our team will review your details. You'll get an email at <strong>{email}</strong> once
-              your reseller account is verified — then you can log in and purchase at reseller pricing.
+              your reseller account is verified.
             </p>
             <button className="btn-primary auth-submit-btn" onClick={() => navigate('/')}>
               Back to Store
