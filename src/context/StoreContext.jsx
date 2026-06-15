@@ -2,7 +2,6 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 import axios from 'axios';
 
 const StoreContext = createContext(null);
-
 const API = import.meta.env.VITE_API_URL || '/api';
 
 const getOrCreateSessionId = () => {
@@ -17,15 +16,18 @@ const getOrCreateSessionId = () => {
 const cartClient = axios.create({ baseURL: API });
 cartClient.interceptors.request.use((config) => {
   config.headers['x-session-id'] = getOrCreateSessionId();
+  const resellerToken = localStorage.getItem('resellerToken');
+  const customerToken = localStorage.getItem('shree_customer_token');
+  const token = resellerToken || customerToken;
+  if (token) config.headers.Authorization = `Bearer ${token}`;
   return config;
 });
 
-// Separate client for public data (no session header needed)
 const publicClient = axios.create({ baseURL: API });
 
 export const StoreProvider = ({ children }) => {
 
-  // ── Customer auth ──────────────────────────────────────────────────────────
+  // ── Customer auth ─────────────────────────────────────────────────────────
   const [customer, setCustomer] = useState(() => {
     try { return JSON.parse(localStorage.getItem('shree_customer_user') || 'null'); }
     catch { return null; }
@@ -43,7 +45,15 @@ export const StoreProvider = ({ children }) => {
     setCustomer(null);
   }, []);
 
-  // ── Cart ─────────────────────────────────────────────────────────────────
+  // ── Reseller auth ─────────────────────────────────────────────────────────
+  const [reseller, setReseller] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('resellerUser') || 'null'); }
+    catch { return null; }
+  });
+
+  const isReseller = !!localStorage.getItem('resellerToken');
+
+  // ── Cart ──────────────────────────────────────────────────────────────────
   const [cart,        setCart]        = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
   const [cartCount,   setCartCount]   = useState(0);
   const [cartLoading, setCartLoading] = useState(false);
@@ -54,7 +64,18 @@ export const StoreProvider = ({ children }) => {
   const [loadingProds, setLoadingProds] = useState(true);
   const [loadingCats,  setLoadingCats]  = useState(true);
 
-  // ── Fetch categories on mount ─────────────────────────────────────────────
+  // Fetch products — use auth client if reseller so backend returns resellerPrice
+  const fetchProducts = useCallback(() => {
+    const client = isReseller ? cartClient : publicClient;
+    client.get('/products')
+      .then(res => {
+        const data = res.data?.products || res.data?.data || res.data || [];
+        setProducts(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setProducts([]))
+      .finally(() => setLoadingProds(false));
+  }, [isReseller]);
+
   useEffect(() => {
     publicClient.get('/categories')
       .then(res => {
@@ -65,16 +86,7 @@ export const StoreProvider = ({ children }) => {
       .finally(() => setLoadingCats(false));
   }, []);
 
-  // ── Fetch all products on mount ───────────────────────────────────────────
-  useEffect(() => {
-    publicClient.get('/products')
-      .then(res => {
-        const data = res.data?.products || res.data?.data || res.data || [];
-        setProducts(Array.isArray(data) ? data : []);
-      })
-      .catch(() => setProducts([]))
-      .finally(() => setLoadingProds(false));
-  }, []);
+  useEffect(() => { fetchProducts(); }, [fetchProducts]);
 
   // ── Cart: fetch count ─────────────────────────────────────────────────────
   const fetchCartCount = useCallback(async () => {
@@ -102,23 +114,21 @@ export const StoreProvider = ({ children }) => {
   }, []);
 
   // ── Cart: add ─────────────────────────────────────────────────────────────
-const addToCart = useCallback(async (productOrId, quantity = 1) => {
-  try {
-    // Accept either a full product object or a plain ID string
-    const productId = productOrId && typeof productOrId === 'object'
-      ? (productOrId.id || productOrId._id)
-      : productOrId;
-
-    const res = await cartClient.post('/cart/add', { productId, quantity });
-    if (res.data.success) {
-      setCart(res.data.cart);
-      setCartCount(res.data.count || 0);
+  const addToCart = useCallback(async (productOrId, quantity = 1) => {
+    try {
+      const productId = productOrId && typeof productOrId === 'object'
+        ? (productOrId.id || productOrId._id)
+        : productOrId;
+      const res = await cartClient.post('/cart/add', { productId, quantity });
+      if (res.data.success) {
+        setCart(res.data.cart);
+        setCartCount(res.data.count || 0);
+      }
+      return res.data;
+    } catch (err) {
+      throw err?.response?.data || err;
     }
-    return res.data;
-  } catch (err) {
-    throw err?.response?.data || err;
-  }
-}, []);
+  }, []);
 
   // ── Cart: update quantity ─────────────────────────────────────────────────
   const updateCartItem = useCallback(async (productId, quantity) => {
@@ -129,9 +139,7 @@ const addToCart = useCallback(async (productOrId, quantity = 1) => {
         const count = res.data.cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
         setCartCount(count);
       }
-    } catch (err) {
-      throw err?.response?.data || err;
-    }
+    } catch (err) { throw err?.response?.data || err; }
   }, []);
 
   // ── Cart: remove item ─────────────────────────────────────────────────────
@@ -143,9 +151,7 @@ const addToCart = useCallback(async (productOrId, quantity = 1) => {
         const count = res.data.cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
         setCartCount(count);
       }
-    } catch (err) {
-      throw err?.response?.data || err;
-    }
+    } catch (err) { throw err?.response?.data || err; }
   }, []);
 
   // ── Cart: clear ───────────────────────────────────────────────────────────
@@ -157,49 +163,25 @@ const addToCart = useCallback(async (productOrId, quantity = 1) => {
     } catch { /* silent */ }
   }, []);
 
-  // Load cart count on mount
   useEffect(() => { fetchCartCount(); }, [fetchCartCount]);
 
-  // Re-fetch products when user returns to the tab
   useEffect(() => {
     const handleVisible = () => {
-      if (document.visibilityState === 'visible') {
-        publicClient.get('/products')
-          .then(res => {
-            const data = res.data?.products || res.data?.data || res.data || [];
-            setProducts(Array.isArray(data) ? data : []);
-          })
-          .catch(() => {});
-      }
+      if (document.visibilityState === 'visible') fetchProducts();
     };
     document.addEventListener('visibilitychange', handleVisible);
     return () => document.removeEventListener('visibilitychange', handleVisible);
-  }, []);
+  }, [fetchProducts]);
 
   return (
     <StoreContext.Provider value={{
-      // Customer auth — used by Login, Navbar, Checkout
-      customer,
-      loginCustomer,
-      logoutCustomer,
-
-      // Products & Categories — used by CategoryPage, FeaturedGrid, etc.
-      products,
-      categories,
-      loadingProds,
-      loadingCats,
-
-      // Cart — used by Checkout, Navbar, ProductCard
-      cart,
-      cartCount,
-      cartLoading,
+      customer, loginCustomer, logoutCustomer,
+      reseller, isReseller,
+      products, categories, loadingProds, loadingCats,
+      cart, cartCount, cartLoading,
       sessionId: getOrCreateSessionId(),
-      fetchCart,
-      fetchCartCount,
-      addToCart,
-      updateCartItem,
-      removeFromCart,
-      clearCart,
+      fetchCart, fetchCartCount,
+      addToCart, updateCartItem, removeFromCart, clearCart,
     }}>
       {children}
     </StoreContext.Provider>
