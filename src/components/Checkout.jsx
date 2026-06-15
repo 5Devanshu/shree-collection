@@ -7,7 +7,6 @@ import './Checkout.css';
 const Checkout = () => {
   const { cart, cartLoading, fetchCart, updateCartItem, removeFromCart } = useStore();
 
-
   const [form, setForm] = useState({
     email:   '',
     phone:   '',
@@ -21,23 +20,30 @@ const Checkout = () => {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState('');
 
-  // Fetch latest cart on mount
   useEffect(() => { fetchCart(); }, [fetchCart]);
 
-  // Pre-fill form from logged-in customer
-useEffect(() => {
-  try {
-    const user = JSON.parse(localStorage.getItem('resellerUser') || 'null');
-    if (user) {
-      setForm(prev => ({
-        ...prev,
-        email: user.email || prev.email,
-        phone: user.phone || prev.phone,
-        name:  user.name  || prev.name,
-      }));
-    }
-  } catch { /* ignore malformed storage */ }
-}, []);
+  useEffect(() => {
+    try {
+      const reseller = JSON.parse(localStorage.getItem('resellerUser') || 'null');
+      const customer = JSON.parse(localStorage.getItem('shree_customer_user') || 'null');
+      const user = reseller || customer;
+      if (user) {
+        setForm(prev => ({
+          ...prev,
+          email: user.email || prev.email,
+          phone: user.phone || prev.phone,
+          name:  user.name  || prev.name,
+          ...(customer?.address ? {
+            line1:   customer.address.line1   || prev.line1,
+            line2:   customer.address.line2   || prev.line2,
+            city:    customer.address.city    || prev.city,
+            state:   customer.address.state   || prev.state,
+            pincode: customer.address.pincode || prev.pincode,
+          } : {}),
+        }));
+      }
+    } catch { /* ignore */ }
+  }, []);
 
   const items    = cart?.items    || [];
   const subtotal = cart?.subtotal || 0;
@@ -48,13 +54,11 @@ useEffect(() => {
     if (error) setError('');
   };
 
-  // ── Quantity controls ──────────────────────────────────────────────────────
   const handleQtyChange = async (productId, newQty) => {
     if (newQty < 1) { await removeFromCart(productId); return; }
     await updateCartItem(productId, newQty);
   };
 
-  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
@@ -67,7 +71,7 @@ useEffect(() => {
     setLoading(true);
     try {
       const orderItems = items.map(item => ({
-        productId: item.product?._id || item.product,
+        productId: item.productId || item.product?._id || item.product,
         title:     item.title,
         price:     item.price,
         quantity:  item.quantity,
@@ -90,17 +94,16 @@ useEffect(() => {
 
       const data = res.data?.data || res.data;
 
-      // Save pending order for callback page
       sessionStorage.setItem('merchantTransactionId', data?.merchantTransactionId || '');
       sessionStorage.setItem('pendingOrder', JSON.stringify({
         merchantTransactionId: data?.merchantTransactionId,
-        guestEmail:    form.email,
-        guestPhone:    form.phone,
-        guestName:     form.name,
-        guestAddress:  { line1: form.line1, line2: form.line2, city: form.city, state: form.state, pincode: form.pincode },
-        items:         orderItems,
+        guestEmail:   form.email,
+        guestPhone:   form.phone,
+        guestName:    form.name,
+        guestAddress: { line1: form.line1, line2: form.line2, city: form.city, state: form.state, pincode: form.pincode },
+        items:        orderItems,
         subtotal,
-        shippingCost:  cart?.shippingCost || 0,
+        shippingCost: cart?.shippingCost || 0,
         total,
       }));
 
@@ -117,7 +120,6 @@ useEffect(() => {
     }
   };
 
-  // ── Empty cart state ───────────────────────────────────────────────────────
   if (!cartLoading && items.length === 0) {
     return (
       <div className="checkout-page">
@@ -150,54 +152,51 @@ useEffect(() => {
 
           <form className="checkout-form" onSubmit={handleSubmit}>
 
-            {/* Contact */}
             <div className="form-section">
               <h2 className="label-lg section-title">Contact Information</h2>
               <div className="form-group">
                 <input type="email" name="email" value={form.email}
                   onChange={handleChange} placeholder="Email Address"
-                  className="checkout-input" required autoComplete="email"/>
+                  className="checkout-input" required autoComplete="email" />
               </div>
               <div className="form-row">
                 <input type="text" name="name" value={form.name}
                   onChange={handleChange} placeholder="Full Name"
-                  className="checkout-input half" required autoComplete="name"/>
+                  className="checkout-input half" required autoComplete="name" />
                 <input type="tel" name="phone" value={form.phone}
                   onChange={handleChange} placeholder="Phone Number"
-                  className="checkout-input half" required autoComplete="tel"/>
+                  className="checkout-input half" required autoComplete="tel" />
               </div>
             </div>
 
-            {/* Shipping */}
             <div className="form-section">
               <h2 className="label-lg section-title">Shipping Address</h2>
               <div className="form-group">
                 <input type="text" name="line1" value={form.line1}
                   onChange={handleChange} placeholder="Address Line 1"
-                  className="checkout-input" required/>
+                  className="checkout-input" required />
               </div>
               <div className="form-group">
                 <input type="text" name="line2" value={form.line2}
                   onChange={handleChange} placeholder="Apartment, suite, etc. (optional)"
-                  className="checkout-input"/>
+                  className="checkout-input" />
               </div>
               <div className="form-row">
                 <input type="text" name="city" value={form.city}
                   onChange={handleChange} placeholder="City"
-                  className="checkout-input half" required/>
+                  className="checkout-input half" required />
                 <input type="text" name="state" value={form.state}
                   onChange={handleChange} placeholder="State"
-                  className="checkout-input half" required/>
+                  className="checkout-input half" required />
               </div>
               <div className="form-group">
                 <input type="text" name="pincode" value={form.pincode}
                   onChange={handleChange} placeholder="PIN Code"
                   className="checkout-input" required
-                  pattern="[0-9]{6}" title="Enter a valid 6-digit PIN code"/>
+                  pattern="[0-9]{6}" title="Enter a valid 6-digit PIN code" />
               </div>
             </div>
 
-            {/* Payment */}
             <div className="form-section">
               <h2 className="label-lg section-title">Payment</h2>
               <div className="phonepe-payment-note">
@@ -229,28 +228,26 @@ useEffect(() => {
             {items.length > 0 && (
               <span style={{
                 fontSize: '0.72rem', color: 'var(--on-surface-variant)',
-                fontWeight: 400, marginLeft: 8, textTransform: 'none', letterSpacing: 0
+                fontWeight: 400, marginLeft: 8, textTransform: 'none', letterSpacing: 0,
               }}>
                 {items.length} item{items.length !== 1 ? 's' : ''}
               </span>
             )}
           </h2>
 
-          {/* Items */}
           <div className="summary-items">
             {cartLoading ? (
               <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>Loading cart…</p>
             ) : items.map((item, i) => {
-              const productId = item.product?._id || item.product;
+              const productId = item.productId || item.product?._id || item.product;
               return (
                 <div className="summary-item" key={productId || i}>
 
-                  {/* Image + qty badge */}
                   <div className="summary-item-image-wrap">
                     {item.image ? (
                       <img src={item.image} alt={item.title}
                         className="summary-item-image"
-                        onError={e => { e.target.style.display='none'; }}/>
+                        onError={e => { e.target.style.display = 'none'; }} />
                     ) : (
                       <div className="summary-item-image summary-item-placeholder">💎</div>
                     )}
@@ -259,14 +256,11 @@ useEffect(() => {
                     )}
                   </div>
 
-                  {/* Details + qty controls */}
                   <div className="summary-item-details">
                     <p className="summary-item-title">{item.title}</p>
                     {item.material && (
                       <p className="summary-item-material">{item.material}</p>
                     )}
-
-                    {/* Quantity controls */}
                     <div className="summary-item-qty-controls">
                       <button type="button" className="qty-btn"
                         onClick={() => handleQtyChange(productId, item.quantity - 1)}>
@@ -284,7 +278,6 @@ useEffect(() => {
                     </div>
                   </div>
 
-                  {/* Line total */}
                   <div className="summary-item-price">
                     ₹{(item.price * item.quantity).toLocaleString('en-IN')}
                   </div>
@@ -294,7 +287,6 @@ useEffect(() => {
             })}
           </div>
 
-          {/* Totals */}
           <div className="summary-totals">
             <div className="summary-row">
               <span className="body-md">Subtotal</span>

@@ -14,6 +14,11 @@ const FeaturedGrid = () => {
   const safeProducts   = Array.isArray(products)   ? products   : [];
   const safeCategories = Array.isArray(categories) ? categories : [];
 
+  const resolveImage = (p) =>
+    p.imageUrl ||
+    (typeof p.image === 'string' ? p.image : p.image?.url) ||
+    '';
+
   const filtered = active === 'all'
     ? safeProducts
     : safeProducts.filter(p =>
@@ -23,102 +28,118 @@ const FeaturedGrid = () => {
 
   const displayList = filtered.length > 0 ? filtered : safeProducts;
 
-  // Resolve image URL — Sequelize stores flat imageUrl
-  const resolveImage = (p) =>
-    p.imageUrl ||
-    (typeof p.image === 'string' ? p.image : p.image?.url) ||
-    '';
+  if (loadingProds) return (
+    <div className="grid-skeleton" style={{ padding: '2rem' }}>
+      {[1,2,3,4].map(i => <div key={i} className="skeleton-card"/>)}
+    </div>
+  );
+
+  if (displayList.length === 0) return (
+    <p style={{ textAlign: 'center', padding: '40px', color: 'var(--on-surface-variant)' }}>
+      No products found.
+    </p>
+  );
 
   return (
-    <section className="mobile-home">
-
-      {/* Sale Banner */}
-      <div className="sale-banner">
-        <div className="sale-banner-text">
-          <span className="sale-label">Shree Collection</span>
-          <h2 className="sale-title">BIG SALE</h2>
-          <p className="sale-sub">Only On This Week</p>
-          <p className="sale-discount">50% OFF</p>
+    <>
+      {/* ── DESKTOP: Curated Pieces section ─────────────────────────────── */}
+      <section className="featured-section">
+        <div className="section-header">
+          <h2 className="headline-md">Curated Pieces</h2>
+          <Link to="/collections/all" className="view-all label-md">View All</Link>
         </div>
-        <div className="sale-banner-deco">💍</div>
-      </div>
+        <div className="product-grid">
+          {displayList.map((product, i) => {
+            const productId = product.id || product._id;
+            const imgSrc    = resolveImage(product);
+            const hasDiscount = product.discountEnabled && product.discountPercent > 0;
+            const displayPrice = hasDiscount ? product.discountedPrice : product.price;
 
-      {/* Category Chips */}
-      <div className="category-scroll">
-        <button
-          className={`cat-chip ${active === 'all' ? 'active' : ''}`}
-          onClick={() => setActive('all')}
-        >All</button>
-        {safeCategories.map(cat => (
-          <button
-            key={cat.id}
-            className={`cat-chip ${active === cat.slug ? 'active' : ''}`}
-            onClick={() => setActive(cat.slug)}
-          >{cat.name}</button>
-        ))}
-      </div>
-
-      {/* Product Grid */}
-      {loadingProds ? (
-        <div className="grid-skeleton">
-          {[1,2,3,4].map(i => <div key={i} className="skeleton-card"/>)}
+            return (
+              <div key={productId} className="product-card" style={{ animationDelay: `${i * 0.04}s` }}>
+                <div className="product-image-container">
+                  <Link to={`/product/${productId}`}>
+                    {imgSrc ? (
+                      <img src={imgSrc} alt={product.title} className="product-image" />
+                    ) : (
+                      <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2.5rem', background:'var(--surface-container-low)' }}>💎</div>
+                    )}
+                  </Link>
+                  {hasDiscount && (
+                    <div style={{ position:'absolute', top:10, left:10, background:'var(--primary)', color:'#fff', fontSize:'0.65rem', fontWeight:700, padding:'3px 8px', letterSpacing:'0.06em' }}>
+                      {product.discountPercent}% OFF
+                    </div>
+                  )}
+                </div>
+                <div className="product-details">
+                  <Link to={`/product/${productId}`} style={{ textDecoration:'none' }}>
+                    <h3 className="title">{product.title}</h3>
+                  </Link>
+                  {product.material && <p className="material">{product.material}</p>}
+                  {hasDiscount ? (
+                    <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:'var(--spacing-2)', flexWrap:'wrap' }}>
+                      <span className="discounted-price">₹{Number(displayPrice).toLocaleString('en-IN')}</span>
+                      <span className="original-price">₹{Number(product.price).toLocaleString('en-IN')}</span>
+                    </div>
+                  ) : (
+                    <p className="price">₹{Number(product.price).toLocaleString('en-IN')}</p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
         </div>
-      ) : displayList.length === 0 ? (
-        <p style={{ textAlign:'center', padding:'40px', color:'var(--on-surface-variant)' }}>
-          No products found.
-        </p>
-      ) : (
+      </section>
+
+      {/* ── MOBILE: scrollable grid with category chips ──────────────────── */}
+      <section className="mobile-home">
+        <div className="sale-banner">
+          <div className="sale-banner-text">
+            <span className="sale-label">Shree Collection</span>
+            <h2 className="sale-title">BIG SALE</h2>
+            <p className="sale-sub">Only On This Week</p>
+            <p className="sale-discount">50% OFF</p>
+          </div>
+          <div className="sale-banner-deco">💍</div>
+        </div>
+
+        <div className="category-scroll">
+          <button className={`cat-chip ${active === 'all' ? 'active' : ''}`} onClick={() => setActive('all')}>All</button>
+          {safeCategories.map(cat => (
+            <button key={cat.id} className={`cat-chip ${active === cat.slug ? 'active' : ''}`} onClick={() => setActive(cat.slug)}>
+              {cat.name}
+            </button>
+          ))}
+        </div>
+
         <div className="mobile-product-grid">
           {displayList.map(product => {
-            const productId  = product.id || product._id;
-            const imgSrc     = resolveImage(product);
-            const isWished   = wishlist.includes(productId);
-
+            const productId = product.id || product._id;
+            const imgSrc    = resolveImage(product);
+            const isWished  = wishlist.includes(productId);
             return (
               <Link key={productId} to={`/product/${productId}`} className="mobile-product-card">
                 <div className="mpc-image-wrap">
                   {imgSrc ? (
-                    <img
-                      src={imgSrc}
-                      alt={product.title}
-                      className="mpc-image"
-                      onError={e => { e.target.style.display = 'none'; }}
-                    />
+                    <img src={imgSrc} alt={product.title} className="mpc-image" onError={e => { e.target.style.display='none'; }} />
                   ) : (
-                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', background:'var(--surface-container-low)' }}>
-                      💎
-                    </div>
+                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'2rem', background:'var(--surface-container-low)' }}>💎</div>
                   )}
-                  <button
-                    className={`mpc-wish ${isWished ? 'wished' : ''}`}
-                    onClick={e => { e.preventDefault(); toggleWishlist(productId); }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24"
-                      fill={isWished ? 'currentColor' : 'none'}
-                      stroke="currentColor" strokeWidth="2">
+                  <button className={`mpc-wish ${isWished ? 'wished' : ''}`} onClick={e => { e.preventDefault(); toggleWishlist(productId); }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill={isWished ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2">
                       <path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/>
                     </svg>
                   </button>
                   {product.stockStatus === 'out_of_stock' && <span className="mpc-badge out">Out</span>}
                   {product.isFeatured && product.stockStatus !== 'out_of_stock' && <span className="mpc-badge hot">Hot</span>}
-                  {product.discountEnabled && product.discountPercent > 0 && (
-                    <span className="mpc-badge sale">{product.discountPercent}% OFF</span>
-                  )}
+                  {product.discountEnabled && product.discountPercent > 0 && <span className="mpc-badge sale">{product.discountPercent}% OFF</span>}
                 </div>
-
                 <div className="mpc-info">
                   <p className="mpc-title">{product.title}</p>
                   <div className="mpc-bottom">
-                    <span className="mpc-price">
-                      ₹{Number(
-                        product.discountEnabled && product.discountedPrice
-                          ? product.discountedPrice : product.price
-                      ).toLocaleString('en-IN')}
-                    </span>
+                    <span className="mpc-price">₹{Number(product.discountEnabled && product.discountedPrice ? product.discountedPrice : product.price).toLocaleString('en-IN')}</span>
                     {product.discountEnabled && product.discountPercent > 0 && (
-                      <span className="mpc-original-price">
-                        ₹{Number(product.price).toLocaleString('en-IN')}
-                      </span>
+                      <span className="mpc-original-price">₹{Number(product.price).toLocaleString('en-IN')}</span>
                     )}
                   </div>
                 </div>
@@ -126,8 +147,8 @@ const FeaturedGrid = () => {
             );
           })}
         </div>
-      )}
-    </section>
+      </section>
+    </>
   );
 };
 
