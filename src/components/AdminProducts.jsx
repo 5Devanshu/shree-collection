@@ -22,6 +22,18 @@ const inputStyle = {
   background: '#faf7f2', outline: 'none', boxSizing: 'border-box',
 };
 
+const generateSku = (categoryName, existingProducts) => {
+  const prefix = (categoryName || 'PROD')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, 8);
+  const existing = existingProducts.filter(p =>
+    p.sku?.startsWith(prefix + '-')
+  );
+  const nextNum = (existing.length + 1).toString().padStart(3, '0');
+  return `${prefix}-${nextNum}`;
+};
+
 const AdminProducts = () => {
   const [products,   setProducts]   = useState([]);
   const [categories, setCategories] = useState([]);
@@ -87,12 +99,19 @@ const AdminProducts = () => {
     setForm(EMPTY_FORM); setFormError(''); setSizeInput('');
   };
 
-  const handleChange = (e) => {
-    const { name, value, type, checked } = e.target;
-    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
-    setFormError('');
-  };
-
+const handleChange = (e) => {
+  const { name, value, type, checked } = e.target;
+  setForm(prev => {
+    const updated = { ...prev, [name]: type === 'checkbox' ? checked : value };
+    // Auto-generate SKU when category is selected and SKU is still empty
+    if (name === 'category' && value && !prev.sku) {
+      const cat = categories.find(c => c.id === value);
+      updated.sku = generateSku(cat?.name, products);
+    }
+    return updated;
+  });
+  setFormError('');
+};
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
