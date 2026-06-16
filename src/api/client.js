@@ -185,8 +185,8 @@ export const initiatePhonePePayment = (data) =>
 export const confirmPhonePePayment = (data) =>
   client.post('/checkout/confirm', data);
 
-export const checkPhonePePaymentStatus = (merchantTransactionId) =>
-  client.get(`/checkout/status/${merchantTransactionId}`);
+export const checkPhonePePaymentStatus = (merchantOrderId) =>
+  client.get(`/checkout/status/${merchantOrderId}`);
 
 // ── Customer profile ──────────────────────────────────────────────────────────
 export const getCustomerMe          = ()     => client.get('/customers/me');
