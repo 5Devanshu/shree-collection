@@ -47,13 +47,14 @@
   font-size: 0.65rem;
   letter-spacing: 0.3em;
   color: #8a6f00;
-  margin-bottom: 20px;
+  margin-bottom: 16px;
 }
 
 .checkout-form-section .display-sm {
   font-size: 1.75rem;
   font-weight: 400;
   margin-bottom: 4px;
+  font-family: var(--font-display, Georgia, serif) !important;
 }
 
 .disclaimer {
@@ -68,17 +69,19 @@
   margin-bottom: 36px;
 }
 
-/* Section label — spaced gold caps */
+/* Section label — spaced gold caps (overrides label-lg) */
+h2.section-title,
 .section-title {
-  font-family: var(--font-sans);
-  font-size: 0.62rem;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: #8a6f00;
-  font-weight: 500;
-  margin-bottom: 18px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid rgba(180, 140, 0, 0.15);
+  font-family: var(--font-sans) !important;
+  font-size: 0.62rem !important;
+  letter-spacing: 0.28em !important;
+  text-transform: uppercase !important;
+  color: #8a6f00 !important;
+  font-weight: 500 !important;
+  margin-bottom: 18px !important;
+  padding-bottom: 10px !important;
+  border-bottom: 1px solid rgba(180, 140, 0, 0.15) !important;
+  line-height: 1.4 !important;
 }
 
 /* ── Inputs ───────────────────────────────────────────────────────────────── */
@@ -220,8 +223,9 @@
   background-color: var(--surface-container-low);
 }
 
+.checkout-summary-section h2.section-title,
 .checkout-summary-section .section-title {
-  margin-bottom: 24px;
+  margin-bottom: 24px !important;
 }
 
 /* ── Cart items ───────────────────────────────────────────────────────────── */
