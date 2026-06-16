@@ -4,6 +4,7 @@ import { useStore }          from '../context/StoreContext';
 import { fetchProductById }  from '../api/client';
 import NotifyMe              from './NotifyMe';
 import './ProductDescription.css';
+import ProductReviews from './ProductReviews';
 
 const RING_SIZES = [4, 4.5, 5, 5.5, 6, 6.6, 7, 7.7, 8, 8.8];
 
@@ -417,7 +418,7 @@ const handleBuyNow = () => {
           )}
         </div>
       </div>
-
+    <ProductReviews productId={productId} />
     </div>
   );
 };
