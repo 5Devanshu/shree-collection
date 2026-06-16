@@ -109,16 +109,16 @@ const ProductDescription = () => {
     touchEndX.current   = null;
   };
 
-  const handleAddToCart = () => {
-    addToCart(product);
-    setAddedToCart(true);
-    setTimeout(() => setAddedToCart(false), 2000);
-  };
+const handleAddToCart = () => {
+  addToCart(product, 1, displayPrice);   // ← pass resolved price
+  setAddedToCart(true);
+  setTimeout(() => setAddedToCart(false), 2000);
+};
 
-  const handleBuyNow = () => {
-    addToCart(product);
-    navigate('/checkout');
-  };
+const handleBuyNow = () => {
+  addToCart(product, 1, displayPrice);   // ← pass resolved price
+  navigate('/checkout');
+};
 
   // ── Price block — shared desktop + mobile ────────────────────────────────
   const PriceBlock = ({ mobile = false }) => {
