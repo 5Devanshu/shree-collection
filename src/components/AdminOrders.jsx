@@ -270,12 +270,42 @@ const AdminOrders = () => {
             )}
 
             <h4 className="label-lg" style={{ marginTop: 'var(--spacing-4)' }}>Items</h4>
-            {(selectedOrder.items || []).map((item, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', padding: 'var(--spacing-2) 0', borderBottom: '1px solid var(--surface-container-highest)' }}>
-                <span className="body-md">{item.title} × {item.quantity}</span>
-                <span className="body-md">₹{(item.price * item.quantity).toLocaleString('en-IN')}</span>
-              </div>
-            ))}
+{(selectedOrder.items || []).map((item, i) => (
+  <div key={i} style={{
+    display: 'flex', alignItems: 'center', gap: 12,
+    padding: 'var(--spacing-3) 0',
+    borderBottom: '1px solid var(--surface-container-highest)',
+  }}>
+    {item.image ? (
+      <img
+        src={item.image}
+        alt={item.title}
+        style={{ width: 52, height: 52, objectFit: 'cover',
+          borderRadius: 4, border: '1px solid var(--surface-container-highest)',
+          flexShrink: 0 }}
+        onError={e => { e.target.style.display = 'none'; }}
+      />
+    ) : (
+      <div style={{ width: 52, height: 52, borderRadius: 4, flexShrink: 0,
+        background: 'var(--surface-container-low)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '1.2rem' }}>💎</div>
+    )}
+    <div style={{ flex: 1 }}>
+      <p className="body-md" style={{ margin: 0, fontWeight: 500 }}>{item.title}</p>
+      {item.material && (
+        <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--on-surface-variant)',
+          textTransform: 'uppercase', letterSpacing: '0.08em' }}>{item.material}</p>
+      )}
+      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>
+        Qty: {item.quantity}
+      </p>
+    </div>
+    <span className="body-md" style={{ fontWeight: 500, flexShrink: 0 }}>
+      ₹{(item.price * item.quantity).toLocaleString('en-IN')}
+    </span>
+  </div>
+))}
 
             <div style={{ marginTop: 'var(--spacing-4)', textAlign: 'right' }}>
               <p className="body-md">Subtotal: ₹{Number(selectedOrder.subtotal || 0).toLocaleString('en-IN')}</p>
