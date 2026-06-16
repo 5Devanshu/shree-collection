@@ -3,9 +3,10 @@ import { useSearchParams, Link }       from 'react-router-dom';
 import { checkPhonePePaymentStatus, confirmPhonePePayment, clearCart } from '../api/client';
 import { useStore } from '../context/StoreContext';
 
-const { fetchCart } = useStore();
+
 
 const CheckoutCallback = () => {
+  const { fetchCart } = useStore();
   const [searchParams] = useSearchParams();
   const [status, setStatus]   = useState('loading'); // loading | success | failed | error
   const [order,  setOrder]    = useState(null);
