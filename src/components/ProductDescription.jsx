@@ -418,9 +418,11 @@ const handleBuyNow = () => {
           )}
         </div>
       </div>
-    <ProductReviews productId={productId} />
+
     </div>
   );
 };
+
+
 
 export default ProductDescription;
