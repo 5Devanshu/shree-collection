@@ -418,7 +418,7 @@ const handleBuyNow = () => {
           )}
         </div>
       </div>
-
+      <ProductReviews productId={productId} />
     </div>
   );
 };
