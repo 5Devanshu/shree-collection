@@ -34,14 +34,23 @@ const CheckoutCallback = () => {
 
         // 2 — Confirm order in DB
         const confirmRes = await confirmPhonePePayment({
-          merchantOrderId,
-          email:          pending?.guestEmail    || '',
-          shippingAddress: pending?.guestAddress || {},
-          validatedItems: pending?.items         || [],
-          subtotal:       pending?.subtotal      || 0,
-          shippingCost:   pending?.shippingCost  || 0,
-          total:          pending?.total         || 0,
-        });
+  merchantOrderId,
+  email:           pending?.guestEmail || '',
+  name:            pending?.guestName  || '',
+  shippingAddress: {
+    name:    pending?.guestName           || '',
+    phone:   pending?.guestPhone          || '',
+    line1:   pending?.guestAddress?.line1   || '',
+    line2:   pending?.guestAddress?.line2   || '',
+    city:    pending?.guestAddress?.city    || '',
+    state:   pending?.guestAddress?.state   || '',
+    pincode: pending?.guestAddress?.pincode || '',
+  },
+  validatedItems: pending?.items        || [],
+  subtotal:       pending?.subtotal     || 0,
+  shippingCost:   pending?.shippingCost || 0,
+  total:          pending?.total        || 0,
+});
 
         sessionStorage.removeItem('pendingOrder');
         await clearCart();
