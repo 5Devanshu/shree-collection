@@ -13,20 +13,14 @@ const getOrCreateSessionId = () => {
   return id;
 };
 
-// Single authenticated client — attaches reseller/customer token + session ID
 const apiClient = axios.create({ baseURL: API });
 apiClient.interceptors.request.use((config) => {
   config.headers['x-session-id'] = getOrCreateSessionId();
-
   const resellerToken = localStorage.getItem('resellerToken');
   const customerToken = localStorage.getItem('shree_customer_token');
   const token = resellerToken || customerToken;
   if (token) config.headers.Authorization = `Bearer ${token}`;
-
-  if (config.data instanceof FormData) {
-    delete config.headers['Content-Type'];
-  }
-
+  if (config.data instanceof FormData) delete config.headers['Content-Type'];
   return config;
 });
 
@@ -71,10 +65,9 @@ export const StoreProvider = ({ children }) => {
   const [loadingProds, setLoadingProds] = useState(true);
   const [loadingCats,  setLoadingCats]  = useState(true);
 
-  // Always use apiClient so reseller token is sent and backend returns correct price
   const loadProducts = useCallback(() => {
     setLoadingProds(true);
-    apiClient.get('/products')
+    apiClient.get('/products', { params: { limit: 200 } })
       .then(res => {
         const data = res.data?.products || res.data?.data || res.data || [];
         setProducts(Array.isArray(data) ? data : []);
@@ -83,7 +76,8 @@ export const StoreProvider = ({ children }) => {
       .finally(() => setLoadingProds(false));
   }, []);
 
-  useEffect(() => {
+  const loadCategories = useCallback(() => {
+    setLoadingCats(true);
     apiClient.get('/categories')
       .then(res => {
         const data = res.data?.data || res.data?.categories || res.data || [];
@@ -93,7 +87,8 @@ export const StoreProvider = ({ children }) => {
       .finally(() => setLoadingCats(false));
   }, []);
 
-  useEffect(() => { loadProducts(); }, [loadProducts]);
+  useEffect(() => { loadCategories(); }, [loadCategories]);
+  useEffect(() => { loadProducts(); },   [loadProducts]);
 
   // ── Cart: fetch count ─────────────────────────────────────────────────────
   const fetchCartCount = useCallback(async () => {
@@ -190,6 +185,8 @@ export const StoreProvider = ({ children }) => {
       sessionId: getOrCreateSessionId(),
       fetchCart, fetchCartCount,
       addToCart, updateCartItem, removeFromCart, clearCart,
+      loadProducts,    // ← exposed for AdminDiscounts refresh
+      loadCategories,  // ← exposed for future use
     }}>
       {children}
     </StoreContext.Provider>
