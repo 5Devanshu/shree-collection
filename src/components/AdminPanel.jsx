@@ -14,8 +14,8 @@ import AdminProducts      from './AdminProducts';
 import AdminCategory      from './AdminCategory';
 import AdminOrders        from './AdminOrders';
 import AdminDiscounts     from './AdminDiscounts';
-
-import AdminResellers from './AdminResellers';
+import AdminResellers     from './AdminResellers';
+import AdminReviews       from './AdminReviews';
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -23,7 +23,6 @@ const AdminPanel = () => {
 
   const [adminUser, setAdminUser] = useState(null);
 
-  // ── Auth guard — redirect to admin login if no token ─────────────────────
   useEffect(() => {
     const token = localStorage.getItem('shree_admin_token');
     if (!token) {
@@ -49,6 +48,7 @@ const AdminPanel = () => {
     if (location.pathname.includes('/orders'))     return 'Orders Management';
     if (location.pathname.includes('/discounts'))  return 'Discounts Management';
     if (location.pathname.includes('/resellers'))  return 'Resellers Management';
+    if (location.pathname.includes('/reviews'))    return 'Reviews Management';
     return 'Dashboard Overview';
   };
 
@@ -98,6 +98,12 @@ const AdminPanel = () => {
           >
             Resellers
           </NavLink>
+          <NavLink
+            to="/admin/reviews"
+            className={({ isActive }) => isActive ? 'admin-nav-item active' : 'admin-nav-item'}
+          >
+            Reviews
+          </NavLink>
         </nav>
 
         <div className="admin-sidebar-footer" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--spacing-3)' }}>
@@ -133,6 +139,7 @@ const AdminPanel = () => {
           <Route path="/discounts"  element={<AdminDiscounts />} />
           <Route path="/orders"     element={<AdminOrders />}    />
           <Route path="/resellers"  element={<AdminResellers />} />
+          <Route path="/reviews"    element={<AdminReviews />}   />
         </Routes>
       </main>
 

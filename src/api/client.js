@@ -192,3 +192,8 @@ export const checkPhonePePaymentStatus = (merchantOrderId) =>
 export const getCustomerMe          = ()     => client.get('/customers/me');
 export const updateCustomerMe       = (data) => client.patch('/customers/me', data);
 export const changeCustomerPassword = (data) => client.post('/customers/change-password', data);
+
+export const getProductReviews = (productId) => client.get(`/reviews/product/${productId}`);
+export const createReview      = (productId, data) => client.post(`/reviews/product/${productId}`, data);
+export const getAllReviews      = (params) => client.get('/reviews', { params });
+export const deleteReview      = (id) => client.delete(`/reviews/${id}`);
