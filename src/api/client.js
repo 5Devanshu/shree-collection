@@ -180,13 +180,13 @@ export const uploadCategoryImage = (formData) => client.post('/media/upload', fo
 
 // ── Payment — PhonePe ─────────────────────────────────────────────────────────
 export const initiatePhonePePayment = (data) =>
-  client.post('/payment/phonepe/initiate', data);
+  client.post('/checkout/initiate', data);
 
 export const confirmPhonePePayment = (data) =>
-  client.post('/payment/phonepe/confirm', data);
+  client.post('/checkout/confirm', data);
 
 export const checkPhonePePaymentStatus = (merchantTransactionId) =>
-  client.get(`/payment/phonepe/status/${merchantTransactionId}`);
+  client.get(`/checkout/status/${merchantTransactionId}`);
 
 // ── Customer profile ──────────────────────────────────────────────────────────
 export const getCustomerMe          = ()     => client.get('/customers/me');
