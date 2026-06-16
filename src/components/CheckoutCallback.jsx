@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useSearchParams, Link }       from 'react-router-dom';
-import { checkPhonePePaymentStatus, confirmPhonePePayment } from '../api/client';
+import { checkPhonePePaymentStatus, confirmPhonePePayment, clearCart } from '../api/client';
+import { useStore } from '../context/StoreContext';
+
+const { fetchCart } = useStore();
 
 const CheckoutCallback = () => {
   const [searchParams] = useSearchParams();
@@ -40,6 +43,8 @@ const CheckoutCallback = () => {
         });
 
         sessionStorage.removeItem('pendingOrder');
+        await clearCart();
+        await fetchCart();     
         setOrder(confirmRes.data?.order);
         setStatus('success');
       } catch (err) {
