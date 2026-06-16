@@ -154,10 +154,17 @@ export const clearCart          = ()         => client.delete('/cart/clear');
 
 // ── Discounts ─────────────────────────────────────────────────────────────────
 export const getDiscountedProducts = ()         => client.get('/discounts');
-export const setDiscount           = (id, data) => client.put(`/discounts/${id}`, data);
-export const enableDiscount        = (id)       => client.patch(`/discounts/${id}/enable`);
-export const disableDiscount       = (id)       => client.patch(`/discounts/${id}/disable`);
-export const removeDiscount        = (id)       => client.delete(`/discounts/${id}`);
+export const setDiscount     = (id, data) => client.patch(`/products/${id}`, {
+  discountPercent: data.discountPercent,
+  discountEnabled: data.discountPercent > 0,
+});
+export const enableDiscount  = (id) => client.patch(`/products/${id}`, { discountEnabled: true });
+export const disableDiscount = (id) => client.patch(`/products/${id}`, { discountEnabled: false });
+export const removeDiscount  = (id) => client.patch(`/products/${id}`, {
+  discountPercent: 0,
+  discountEnabled: false,
+  discountedPrice: 0,
+});
 
 // ── Stock Notifications ───────────────────────────────────────────────────────
 export const subscribeToStock   = (productId, data) =>
