@@ -14,6 +14,7 @@ import Login              from './components/Login';
 import Footer             from './components/Footer';              // ← ADDED
 import TermsAndConditions from './components/TermsAndConditions';  // ← ADDED
 import CustomerProfile from './components/CustomerProfile';
+import CheckoutCallback from './components/CheckoutCallback';
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -47,6 +48,7 @@ function AppRoutes() {
         <Route path="/collections/:category" element={<CategoryPage />} />
         <Route path="/product/:id"           element={<ProductDescription />} />
         <Route path="/checkout"              element={<Checkout />} />
+        <Route path="/checkout/callback" element={<CheckoutCallback />} />
         <Route path="/terms"                 element={<TermsAndConditions />} /> {/* ← ADDED */}
 
         {/* ── Reseller auth ──────────────────────────────────────────── */}
