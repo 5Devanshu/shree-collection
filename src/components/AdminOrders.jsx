@@ -13,6 +13,7 @@ const AdminOrders = () => {
   const [loading,       setLoading]       = useState(true);
   const [error,         setError]         = useState('');
   const [statusFilter,  setStatusFilter]  = useState('');
+  const [buyerFilter,   setBuyerFilter]   = useState('');     // '' | 'customer' | 'reseller'
   const [page,          setPage]          = useState(1);
   const [totalPages,    setTotalPages]    = useState(1);
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -24,7 +25,8 @@ const AdminOrders = () => {
     setError('');
     try {
       const params = { page, limit: 20 };
-      if (statusFilter) params.status = statusFilter;
+      if (statusFilter) params.status    = statusFilter;
+      if (buyerFilter)  params.buyerType = buyerFilter;
 
       const res  = await fetchOrders(params);
       const data = res.data;
@@ -40,7 +42,7 @@ const AdminOrders = () => {
     } finally {
       setLoading(false);
     }
-  }, [page, statusFilter]);
+  }, [page, statusFilter, buyerFilter]);
 
   useEffect(() => { loadOrders(); }, [loadOrders]);
 
@@ -90,8 +92,9 @@ const AdminOrders = () => {
     });
   };
 
-  // ── Helper: get order id (Postgres uuid or Mongo _id) ────────────────────
-  const getId = (order) => order.id || order._id;
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  const getId        = (order) => order.id || order._id;
+  const getBuyerType = (order) => (order.resellerId ? 'Reseller' : 'Customer');
 
   return (
     <div className="admin-content">
@@ -100,6 +103,15 @@ const AdminOrders = () => {
       <div className="admin-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 'var(--spacing-6)' }}>
         <h2 className="headline-md">All Orders</h2>
         <div style={{ display: 'flex', gap: 'var(--spacing-3)' }}>
+          <select
+            value={buyerFilter}
+            onChange={e => { setBuyerFilter(e.target.value); setPage(1); }}
+            style={{ padding: 'var(--spacing-2) var(--spacing-4)', borderRadius: 4, border: '1px solid var(--surface-container-highest)' }}
+          >
+            <option value="">All Buyers</option>
+            <option value="customer">Customers</option>
+            <option value="reseller">Resellers</option>
+          </select>
           <select
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
@@ -142,6 +154,7 @@ const AdminOrders = () => {
                 <tr>
                   <th className="label-md">Order #</th>
                   <th className="label-md">Customer</th>
+                  <th className="label-md">Type</th>
                   <th className="label-md">Email</th>
                   <th className="label-md">Date</th>
                   <th className="label-md">Status</th>
@@ -153,7 +166,7 @@ const AdminOrders = () => {
               <tbody>
                 {orders.length === 0 ? (
                   <tr>
-                    <td colSpan={8} style={{ textAlign: 'center', padding: 'var(--spacing-8)', color: 'var(--on-surface-variant)' }}>
+                    <td colSpan={9} style={{ textAlign: 'center', padding: 'var(--spacing-8)', color: 'var(--on-surface-variant)' }}>
                       No orders found.
                     </td>
                   </tr>
@@ -165,6 +178,11 @@ const AdminOrders = () => {
                       </td>
                       <td className="body-md">
                         {order.shippingAddress?.name || order.guestName || '—'}
+                      </td>
+                      <td>
+                        <span className={`status-badge ${order.resellerId ? 'status-shipped' : 'status-delivered'}`}>
+                          {getBuyerType(order)}
+                        </span>
                       </td>
                       <td className="body-md">{order.email || order.guestEmail || '—'}</td>
                       <td className="body-md">{formatDate(order.createdAt)}</td>
@@ -248,6 +266,7 @@ const AdminOrders = () => {
             </div>
 
             <p className="body-md"><strong>Order #:</strong> {selectedOrder.orderNumber || getId(selectedOrder)}</p>
+            <p className="body-md"><strong>Buyer Type:</strong> {getBuyerType(selectedOrder)}</p>
             <p className="body-md"><strong>Date:</strong> {formatDate(selectedOrder.createdAt)}</p>
             <p className="body-md"><strong>Email:</strong> {selectedOrder.email || selectedOrder.guestEmail || '—'}</p>
             <p className="body-md"><strong>Status:</strong> {selectedOrder.status}</p>

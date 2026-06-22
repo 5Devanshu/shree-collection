@@ -4,21 +4,32 @@ import { useStore }                    from '../context/StoreContext';
 import { initiatePhonePePayment }      from '../api/client';
 import './Checkout.css';
 
+const INDIAN_STATES = [
+  'Andhra Pradesh','Arunachal Pradesh','Assam','Bihar','Chhattisgarh','Goa','Gujarat',
+  'Haryana','Himachal Pradesh','Jharkhand','Karnataka','Kerala','Madhya Pradesh',
+  'Maharashtra','Manipur','Meghalaya','Mizoram','Nagaland','Odisha','Punjab','Rajasthan',
+  'Sikkim','Tamil Nadu','Telangana','Tripura','Uttar Pradesh','Uttarakhand','West Bengal',
+  'Andaman and Nicobar Islands','Chandigarh','Dadra and Nagar Haveli and Daman and Diu',
+  'Delhi','Jammu and Kashmir','Ladakh','Lakshadweep','Puducherry',
+];
+
+// Mirror of backend calculateDeliveryCharge — display only; backend is authoritative.
+const calcDelivery = (subtotal, isReseller, state) => {
+  const threshold = isReseller ? Infinity : 500; // reseller always charged
+  if (Number(subtotal) >= threshold) return 0;
+  return String(state || '').trim().toLowerCase() === 'maharashtra' ? 70 : 90;
+};
+
 const Checkout = () => {
   const { cart, cartLoading, fetchCart, updateCartItem, removeFromCart } = useStore();
 
   const [form, setForm] = useState({
-    email:   '',
-    phone:   '',
-    name:    '',
-    line1:   '',
-    line2:   '',
-    city:    '',
-    state:   '',
-    pincode: '',
+    email: '', phone: '', name: '',
+    line1: '', line2: '', city: '', state: '', pincode: '',
   });
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState('');
+  const [isReseller, setIsReseller] = useState(false);
+  const [loading, setLoading]       = useState(false);
+  const [error,   setError]         = useState('');
 
   useEffect(() => { fetchCart(); }, [fetchCart]);
 
@@ -27,6 +38,7 @@ const Checkout = () => {
       const reseller = JSON.parse(localStorage.getItem('resellerUser') || 'null');
       const customer = JSON.parse(localStorage.getItem('shree_customer_user') || 'null');
       const user = reseller || customer;
+      setIsReseller(!!reseller);
       if (user) {
         setForm(prev => ({
           ...prev,
@@ -46,9 +58,10 @@ const Checkout = () => {
   }, []);
 
   const items    = cart?.items    || [];
-
   const subtotal = cart?.subtotal || 0;
-  const total    = cart?.total    || 0;
+
+  const deliveryCharge = calcDelivery(subtotal, isReseller, form.state);
+  const grandTotal     = subtotal + deliveryCharge;
 
   const handleChange = (e) => {
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
@@ -66,6 +79,10 @@ const Checkout = () => {
 
     if (!items.length) {
       setError('Your cart is empty. Please add items before checking out.');
+      return;
+    }
+    if (!form.state) {
+      setError('Please select your state to calculate delivery.');
       return;
     }
 
@@ -104,8 +121,8 @@ const Checkout = () => {
         guestAddress: { line1: form.line1, line2: form.line2, city: form.city, state: form.state, pincode: form.pincode },
         items:        orderItems,
         subtotal,
-        shippingCost: cart?.shippingCost || 0,
-        total,
+        shippingCost: deliveryCharge,
+        total:        grandTotal,
       }));
 
       const redirectUrl = data?.redirectUrl || data?.checkoutUrl || data?.paymentUrl;
@@ -186,9 +203,12 @@ const Checkout = () => {
                 <input type="text" name="city" value={form.city}
                   onChange={handleChange} placeholder="City"
                   className="checkout-input half" required />
-                <input type="text" name="state" value={form.state}
-                  onChange={handleChange} placeholder="State"
-                  className="checkout-input half" required />
+                <select name="state" value={form.state}
+                  onChange={handleChange}
+                  className="checkout-input half" required>
+                  <option value="" disabled>Select State</option>
+                  {INDIAN_STATES.map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
               </div>
               <div className="form-group">
                 <input type="text" name="pincode" value={form.pincode}
@@ -216,7 +236,7 @@ const Checkout = () => {
             >
               {loading     ? 'Processing…'   :
                cartLoading ? 'Loading cart…' :
-               `Proceed to Payment — ₹${total.toLocaleString('en-IN')}`}
+               `Proceed to Payment — ₹${grandTotal.toLocaleString('en-IN')}`}
             </button>
 
           </form>
@@ -295,11 +315,17 @@ const Checkout = () => {
             </div>
             <div className="summary-row">
               <span className="body-md">Shipping</span>
-              <span className="body-md" style={{ color: 'var(--primary)' }}>Complimentary</span>
+              {deliveryCharge === 0 ? (
+                <span className="body-md" style={{ color: 'var(--primary)' }}>Free</span>
+              ) : !form.state ? (
+                <span className="body-md" style={{ color: 'var(--on-surface-variant)' }}>Select state</span>
+              ) : (
+                <span className="body-md">₹{deliveryCharge.toLocaleString('en-IN')}</span>
+              )}
             </div>
             <div className="summary-row summary-row--total">
               <span className="label-lg">Total</span>
-              <span className="label-lg">₹{total.toLocaleString('en-IN')}</span>
+              <span className="label-lg">₹{grandTotal.toLocaleString('en-IN')}</span>
             </div>
           </div>
         </div>
