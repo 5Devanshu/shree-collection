@@ -5,7 +5,7 @@ import './FeaturedGrid.css';
 import ProductCard from './ProductCard';
 
 const FeaturedGrid = () => {
-  const { products, categories, loadingProds } = useStore();
+  const { products, categories, loadingProds, isReseller } = useStore();
   const [active,   setActive]   = useState('all');
   const [wishlist, setWishlist] = useState([]);
 
@@ -19,6 +19,29 @@ const FeaturedGrid = () => {
     p.imageUrl ||
     (typeof p.image === 'string' ? p.image : p.image?.url) ||
     '';
+
+  // ── Shared price resolution — mirrors ProductCard logic ──────────────────
+  // Reseller price wins when logged in as reseller and a reseller price exists,
+  // then discount, then retail. Returned so both badge + price stay in sync.
+  const resolvePrice = (p) => {
+    const numericPrice      = Number(p.price)           || 0;
+    const numericReseller   = Number(p.resellerPrice)   || 0;
+    const numericDiscounted = Number(p.discountedPrice) || 0;
+
+    const showResellerPrice = isReseller && numericReseller > 0;
+    const hasDiscount       = !showResellerPrice
+      && p.discountEnabled
+      && numericDiscounted > 0
+      && numericDiscounted < numericPrice;
+
+    const value = showResellerPrice
+      ? numericReseller
+      : hasDiscount
+        ? numericDiscounted
+        : numericPrice;
+
+    return { numericPrice, numericReseller, numericDiscounted, showResellerPrice, hasDiscount, value };
+  };
 
   const filtered = active === 'all'
     ? safeProducts
@@ -44,41 +67,39 @@ const FeaturedGrid = () => {
   return (
     <>
       {/* ── DESKTOP: Curated Pieces section ─────────────────────────────── */}
-<section className="featured-section">
-  <div className="section-header">
-    <h2 className="headline-md">Curated Pieces</h2>
-    <Link to="/collections/all" className="view-all label-md">View All</Link>
-  </div>
-  <div className="product-grid">
-    {displayList.map((product, i) => {
-      const productId = product.id || product._id;
-      return (
-        // In FeaturedGrid desktop section, ProductCard render:
-<ProductCard
-  key={productId}
-  id={productId}
-  title={product.title}
-  material={product.material}
-  price={product.price}
-  resellerPrice={product.resellerPrice}      // ← add
-  displayPrice={product.displayPrice}         // ← add
-  isResellerPrice={product.isResellerPrice}   // ← add
-  discountEnabled={product.discountEnabled}
-  discountedPrice={product.discountedPrice}
-  discountPercent={product.discountPercent}
-  imageUrl={product.imageUrl}
-  image={product.image}
-  stock={product.stock}
-  delay={i * 0.04}
-/>
-      );
-    })}
-  </div>
-</section>
+      <section className="featured-section">
+        <div className="section-header">
+          <h2 className="headline-md">Curated Pieces</h2>
+          <Link to="/collections/all" className="view-all label-md">View All</Link>
+        </div>
+        <div className="product-grid">
+          {displayList.map((product, i) => {
+            const productId = product.id || product._id;
+            return (
+              <ProductCard
+                key={productId}
+                id={productId}
+                title={product.title}
+                material={product.material}
+                price={product.price}
+                resellerPrice={product.resellerPrice}
+                displayPrice={product.displayPrice}
+                isResellerPrice={product.isResellerPrice}
+                discountEnabled={product.discountEnabled}
+                discountedPrice={product.discountedPrice}
+                discountPercent={product.discountPercent}
+                imageUrl={product.imageUrl}
+                image={product.image}
+                stock={product.stock}
+                delay={i * 0.04}
+              />
+            );
+          })}
+        </div>
+      </section>
 
       {/* ── MOBILE: scrollable grid with category chips ──────────────────── */}
       <section className="mobile-home">
-        
 
         <div className="category-scroll">
           <button className={`cat-chip ${active === 'all' ? 'active' : ''}`} onClick={() => setActive('all')}>All</button>
@@ -94,6 +115,11 @@ const FeaturedGrid = () => {
             const productId = product.id || product._id;
             const imgSrc    = resolveImage(product);
             const isWished  = wishlist.includes(productId);
+            const {
+              numericPrice, numericReseller, numericDiscounted,
+              showResellerPrice, hasDiscount, value: priceToShow,
+            } = resolvePrice(product);
+
             return (
               <Link key={productId} to={`/product/${productId}`} className="mobile-product-card">
                 <div className="mpc-image-wrap">
@@ -108,15 +134,25 @@ const FeaturedGrid = () => {
                     </svg>
                   </button>
                   {product.stockStatus === 'out_of_stock' && <span className="mpc-badge out">Out</span>}
-                  {product.isFeatured && product.stockStatus !== 'out_of_stock' && <span className="mpc-badge hot">Hot</span>}
-                  {product.discountEnabled && product.discountPercent > 0 && <span className="mpc-badge sale">{product.discountPercent}% OFF</span>}
+                  {showResellerPrice && <span className="mpc-badge" style={{ background:'#2e7d32', color:'#fff' }}>Reseller</span>}
+                  {!showResellerPrice && product.isFeatured && product.stockStatus !== 'out_of_stock' && <span className="mpc-badge hot">Hot</span>}
+                  {!showResellerPrice && hasDiscount && product.discountPercent > 0 && <span className="mpc-badge sale">{product.discountPercent}% OFF</span>}
                 </div>
                 <div className="mpc-info">
                   <p className="mpc-title">{product.title}</p>
                   <div className="mpc-bottom">
-                    <span className="mpc-price">₹{Number(product.discountEnabled && product.discountedPrice ? product.discountedPrice : product.price).toLocaleString('en-IN')}</span>
-                    {product.discountEnabled && product.discountPercent > 0 && (
-                      <span className="mpc-original-price">₹{Number(product.price).toLocaleString('en-IN')}</span>
+                    {showResellerPrice ? (
+                      <>
+                        <span className="mpc-price" style={{ color:'#2e7d32' }}>₹{numericReseller.toLocaleString('en-IN')}</span>
+                        <span className="mpc-original-price">₹{numericPrice.toLocaleString('en-IN')}</span>
+                      </>
+                    ) : hasDiscount ? (
+                      <>
+                        <span className="mpc-price">₹{numericDiscounted.toLocaleString('en-IN')}</span>
+                        <span className="mpc-original-price">₹{numericPrice.toLocaleString('en-IN')}</span>
+                      </>
+                    ) : (
+                      <span className="mpc-price">₹{numericPrice.toLocaleString('en-IN')}</span>
                     )}
                   </div>
                 </div>
