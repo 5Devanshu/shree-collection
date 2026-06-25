@@ -4,15 +4,15 @@ import { StoreProvider } from './context/StoreContext';
 
 import Navbar             from './components/Navbar';
 import Hero               from './components/Hero';
-import FeaturedGrid       from './components/FeaturedGrid';
+import CategoryShowcase   from './components/CategoryShowcase'; // ← REPLACES FeaturedGrid on Home Page
 import AdminPanel         from './components/AdminPanel';
 import AdminLogin         from './components/AdminLogin';
 import CategoryPage       from './components/CategoryPage';
 import ProductDescription from './components/ProductDescription';
 import Checkout           from './components/Checkout';
 import Login              from './components/Login';
-import Footer             from './components/Footer';              // ← ADDED
-import TermsAndConditions from './components/TermsAndConditions';  // ← ADDED
+import Footer             from './components/Footer';
+import TermsAndConditions from './components/TermsAndConditions';
 import CustomerProfile from './components/CustomerProfile';
 import CheckoutCallback from './components/CheckoutCallback';
 
@@ -44,12 +44,12 @@ function AppRoutes() {
       <Navbar />
       <Routes>
         {/* ── Public storefront ──────────────────────────────────────── */}
-        <Route path="/" element={<><Hero /><FeaturedGrid /></>} />
+        <Route path="/" element={<><Hero /><CategoryShowcase /></>} />
         <Route path="/collections/:category" element={<CategoryPage />} />
         <Route path="/product/:id"           element={<ProductDescription />} />
         <Route path="/checkout"              element={<Checkout />} />
         <Route path="/checkout/callback" element={<CheckoutCallback />} />
-        <Route path="/terms"                 element={<TermsAndConditions />} /> {/* ← ADDED */}
+        <Route path="/terms"                 element={<TermsAndConditions />} />
 
         {/* ── Reseller auth ──────────────────────────────────────────── */}
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
@@ -71,7 +71,7 @@ function AppRoutes() {
         <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/profile" element={<CustomerProfile />} />
       </Routes>
-      <Footer /> {/* ← ADDED — after Routes so it sits below every page */}
+      <Footer />
     </div>
   );
 }
