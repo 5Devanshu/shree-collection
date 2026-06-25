@@ -184,6 +184,10 @@ const Navbar = () => {
                   {reseller?.company || 'Reseller Account'}
                 </div>
                 <div className="dropdown-divider" />
+                <Link to="/reseller/profile" className="dropdown-item label-md" onClick={() => setOpenDropdown(null)}>
+                  My Profile
+                </Link>
+                <div className="dropdown-divider" />
                 <button
                   className="dropdown-item label-md dropdown-item--danger"
                   onClick={handleResellerLogout}
@@ -254,13 +258,6 @@ const Navbar = () => {
     </nav>
   );
 };
-
-
-
-
-
-
-
 
 
 export default Navbar;
