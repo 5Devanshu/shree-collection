@@ -11,11 +11,8 @@ const EMPTY_FORM = {
   // ── Sizing ──
   sizeEnabled: false,
   sizeLabel: '',
-  sizeMin: '',
-  sizeMax: '',
-  sizeStep: '1',
-  perSizeStock: false,   // does admin want individual stock per size?
-  sizeStock: [],          // [{ size, stock }] — only used when perSizeStock is true
+  sizeStock: [],       // [{ size, stock }] — admin adds these one at a time
+  newSizeValue: '',    // controlled input for the "Add Size" box
 };
 
 const labelStyle = {
@@ -38,17 +35,6 @@ const generateSku = (categoryName, existingProducts) => {
   const existing = existingProducts.filter(p => p.sku?.startsWith(prefix + '-'));
   const nextNum  = (existing.length + 1).toString().padStart(3, '0');
   return `${prefix}-${nextNum}`;
-};
-
-// Live preview of the size list a given range would generate —
-// mirrors generateSizeRange() on the backend so admin sees exactly
-// what will be saved before submitting.
-const previewSizeRange = (min, max, step) => {
-  const lo = Number(min), hi = Number(max), st = Number(step) || 1;
-  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo || st <= 0) return [];
-  const out = [];
-  for (let v = lo; v <= hi + 1e-9; v = +(v + st).toFixed(2)) out.push(+v.toFixed(2));
-  return out;
 };
 
 const AdminProducts = () => {
@@ -108,11 +94,12 @@ const AdminProducts = () => {
       // ── Sizing ──
       sizeEnabled:   p.sizeEnabled || false,
       sizeLabel:     p.sizeLabel   || '',
-      sizeMin:       p.sizeMin     ?? '',
-      sizeMax:       p.sizeMax     ?? '',
-      sizeStep:      p.sizeStep    ?? '1',
-      perSizeStock:  Array.isArray(p.sizeStock) && p.sizeStock.length > 0,
-      sizeStock:     Array.isArray(p.sizeStock) ? p.sizeStock : [],
+      sizeStock:     Array.isArray(p.sizeStock) && p.sizeStock.length > 0
+        ? p.sizeStock.map(s => ({ size: Number(s.size), stock: Number(s.stock) || 0 }))
+        : Array.isArray(p.sizes)
+          ? p.sizes.map(s => ({ size: Number(s), stock: 0 })) // legacy products with sizes but no stock yet
+          : [],
+      newSizeValue: '',
     });
     setEditingId(p.id);
     setFormError(''); setShowModal(true);
@@ -150,29 +137,50 @@ const AdminProducts = () => {
     });
   };
 
-  const handleTogglePerSizeStock = () => {
+  // ── Add a single size chip ──────────────────────────────────────────────
+  // Admin types a number (integer or decimal, e.g. 2.4, 2.6, 7, 8.5) and
+  // clicks Add (or hits Enter). Duplicate sizes are rejected.
+  const handleAddSize = () => {
     setForm(prev => {
-      const enabling = !prev.perSizeStock;
-      const sizes = previewSizeRange(prev.sizeMin, prev.sizeMax, prev.sizeStep);
-      return {
-        ...prev,
-        perSizeStock: enabling,
-        sizeStock: enabling
-          ? sizes.map(s => {
-              const existing = prev.sizeStock.find(ss => Number(ss.size) === s);
-              return { size: s, stock: existing ? existing.stock : 0 };
-            })
-          : [],
-      };
+      const raw = prev.newSizeValue.trim();
+      if (raw === '') return prev;
+
+      const value = Number(raw);
+      if (!Number.isFinite(value)) {
+        setFormError('Size must be a number (e.g. 2.4, 2.6, 7).');
+        return prev;
+      }
+      if (prev.sizeStock.some(s => s.size === value)) {
+        setFormError(`Size ${value} has already been added.`);
+        return prev;
+      }
+
+      const next = [...prev.sizeStock, { size: value, stock: 0 }]
+        .sort((a, b) => a.size - b.size);
+      return { ...prev, sizeStock: next, newSizeValue: '' };
     });
+  };
+
+  const handleNewSizeKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddSize();
+    }
+  };
+
+  const handleRemoveSize = (size) => {
+    setForm(prev => ({
+      ...prev,
+      sizeStock: prev.sizeStock.filter(s => s.size !== size),
+    }));
   };
 
   const handleSizeStockChange = (size, value) => {
     const val = Number(value) || 0;
-    setForm(prev => {
-      const others = prev.sizeStock.filter(ss => Number(ss.size) !== size);
-      return { ...prev, sizeStock: [...others, { size, stock: val }].sort((a, b) => a.size - b.size) };
-    });
+    setForm(prev => ({
+      ...prev,
+      sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, stock: val } : s),
+    }));
   };
 
   const handleImageUpload = async (e) => {
@@ -213,11 +221,8 @@ const AdminProducts = () => {
     if (!form.category)     return setFormError('Please select a category.');
     if (!form.price)        return setFormError('Price is required.');
     if (!form.image)        return setFormError('Please upload a product image.');
-    if (form.sizeEnabled && (form.sizeMin === '' || form.sizeMax === '')) {
-      return setFormError('Please set both a "From" and "To" size, or turn off sizing.');
-    }
-    if (form.sizeEnabled && Number(form.sizeMax) < Number(form.sizeMin)) {
-      return setFormError('"To" size must be greater than or equal to "From" size.');
+    if (form.sizeEnabled && form.sizeStock.length === 0) {
+      return setFormError('Please add at least one size, or turn off sizing.');
     }
 
     setSaving(true);
@@ -237,13 +242,10 @@ const AdminProducts = () => {
         plating:       form.plating.trim(),
         stoneType:     form.stoneType.trim(),
         sku:           form.sku.trim(),
-        // ── Sizing — backend derives the flat `sizes` array from this range ──
+        // ── Sizing — backend derives the flat `sizes` array from sizeStock ──
         sizeEnabled:   form.sizeEnabled,
         sizeLabel:     form.sizeLabel.trim(),
-        sizeMin:       form.sizeEnabled ? Number(form.sizeMin) : null,
-        sizeMax:       form.sizeEnabled ? Number(form.sizeMax) : null,
-        sizeStep:      form.sizeEnabled ? (Number(form.sizeStep) || 1) : 1,
-        sizeStock:     form.sizeEnabled && form.perSizeStock ? form.sizeStock : [],
+        sizeStock:     form.sizeEnabled ? form.sizeStock : [],
       };
       if (editingId) { await updateProduct(editingId, payload); }
       else           { await createProduct(payload); }
@@ -276,8 +278,6 @@ const AdminProducts = () => {
     low_stock:    { text: 'Low Stock',    cls: 'status-shipped'   },
     out_of_stock: { text: 'Out of Stock', cls: 'status-pending'   },
   }[s] || { text: 'In Stock', cls: 'status-delivered' });
-
-  const sizePreview = previewSizeRange(form.sizeMin, form.sizeMax, form.sizeStep);
 
   return (
     <div className="admin-content">
@@ -369,8 +369,7 @@ const AdminProducts = () => {
                         <div>
                           <div style={{ fontWeight:600, color:'#735c00' }}>{p.sizeLabel || 'Size'}</div>
                           <div style={{ color:'#aaa', marginTop:2 }}>
-                            {p.sizes[0]}–{p.sizes[p.sizes.length - 1]}
-                            {Array.isArray(p.sizeStock) && p.sizeStock.length > 0 ? ' · per-size stock' : ''}
+                            {p.sizes.join(', ')}
                           </div>
                         </div>
                       ) : '—'}
@@ -511,7 +510,7 @@ const AdminProducts = () => {
                   <label style={labelStyle}>Stock Count</label>
                   <input name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="e.g. 10" min="0" style={inputStyle} />
                   <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
-                    {form.sizeEnabled && form.perSizeStock
+                    {form.sizeEnabled && form.sizeStock.length > 0
                       ? 'Used as fallback only — per-size stock below takes priority'
                       : '0 = Out · 1–5 = Low · 6+ = In Stock'}
                   </p>
@@ -558,7 +557,7 @@ const AdminProducts = () => {
                   style={{ ...inputStyle, resize:'vertical', lineHeight:1.6 }} />
               </div>
 
-              {/* ── Sizes — range picker replacing free-text input ── */}
+              {/* ── Sizes — admin adds each size individually, with its own stock ── */}
               <div style={{ marginBottom:'1.5rem' }}>
                 <label style={labelStyle}>Sizes</label>
 
@@ -595,99 +594,69 @@ const AdminProducts = () => {
                       </p>
                     </div>
 
-                    {/* Range pickers */}
-                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'1rem', marginBottom:'1rem' }}>
-                      <div>
-                        <label style={labelStyle}>From</label>
+                    {/* Add Size control */}
+                    <div style={{ marginBottom:'1rem' }}>
+                      <label style={labelStyle}>Add Size</label>
+                      <div style={{ display:'flex', gap:8 }}>
                         <input
-                          name="sizeMin" type="number" step="0.5"
-                          value={form.sizeMin}
-                          onChange={handleChange}
-                          placeholder="e.g. 1"
-                          style={inputStyle}
+                          type="number"
+                          step="any"
+                          inputMode="decimal"
+                          value={form.newSizeValue}
+                          onChange={e => { setForm(prev => ({ ...prev, newSizeValue: e.target.value })); setFormError(''); }}
+                          onKeyDown={handleNewSizeKeyDown}
+                          placeholder="e.g. 2.4 or 8"
+                          style={{ ...inputStyle, maxWidth: 160 }}
                         />
+                        <button
+                          type="button"
+                          onClick={handleAddSize}
+                          style={{
+                            background:'#735c00', color:'#fff', border:'none', borderRadius:6,
+                            padding:'0 1.2rem', fontFamily:'inherit', fontSize:'0.85rem',
+                            fontWeight:600, cursor:'pointer', whiteSpace:'nowrap',
+                          }}
+                        >+ Add Size</button>
                       </div>
-                      <div>
-                        <label style={labelStyle}>To</label>
-                        <input
-                          name="sizeMax" type="number" step="0.5"
-                          value={form.sizeMax}
-                          onChange={handleChange}
-                          placeholder="e.g. 10"
-                          style={inputStyle}
-                        />
-                      </div>
-                      <div>
-                        <label style={labelStyle}>Step</label>
-                        <input
-                          name="sizeStep" type="number" step="0.5" min="0.5"
-                          value={form.sizeStep}
-                          onChange={handleChange}
-                          placeholder="1"
-                          style={inputStyle}
-                        />
-                      </div>
+                      <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                        Enter any number — whole (7, 8) or decimal (2.4, 2.6, 2.8) — then click Add Size. Each size gets its own stock count below.
+                      </p>
                     </div>
 
-                    {/* Live preview of generated sizes */}
-                    {form.sizeMin !== '' && form.sizeMax !== '' && (
-                      <div style={{ marginBottom:'1rem' }}>
-                        <label style={labelStyle}>Preview</label>
-                        {sizePreview.length > 0 ? (
-                          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                            {sizePreview.map(s => (
-                              <span key={s} style={{ padding:'4px 12px', border:'1px solid #735c00', borderRadius:4, fontSize:'0.85rem', background:'#fff' }}>
-                                {s}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <p style={{ margin:0, fontSize:'0.8rem', color:'#c0392b' }}>
-                            Enter a valid range ("To" must be greater than or equal to "From").
-                          </p>
-                        )}
-                      </div>
-                    )}
-
-                    {/* Per-size stock toggle */}
-                    <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid #e8e0d5' }}>
-                      <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
-                        <div onClick={handleTogglePerSizeStock}
-                          style={{ width:44, height:24, borderRadius:12, cursor:'pointer', background: form.perSizeStock ? '#735c00' : '#ddd', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
-                          <div style={{ position:'absolute', top:2, left: form.perSizeStock ? 22 : 2, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }} />
+                    {/* Size chips with per-size stock */}
+                    {form.sizeStock.length === 0 ? (
+                      <p style={{ margin:0, fontSize:'0.8rem', color:'#c0392b' }}>
+                        No sizes added yet. Add at least one size above.
+                      </p>
+                    ) : (
+                      <div>
+                        <label style={labelStyle}>Sizes &amp; Stock</label>
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px, 1fr))', gap:'0.75rem' }}>
+                          {form.sizeStock.map(({ size, stock }) => (
+                            <div key={size} style={{ position:'relative', background:'#fff', border:'1px solid #e0d5c5', borderRadius:8, padding:'0.6rem 0.7rem' }}>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveSize(size)}
+                                title="Remove size"
+                                style={{
+                                  position:'absolute', top:-8, right:-8, background:'#c0392b', color:'#fff',
+                                  border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', fontSize:'0.7rem',
+                                  display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
+                                }}
+                              >✕</button>
+                              <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:6, color:'#735c00' }}>
+                                {size}
+                              </div>
+                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Stock</label>
+                              <input
+                                type="number" min="0"
+                                value={stock}
+                                onChange={e => handleSizeStockChange(size, e.target.value)}
+                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem' }}
+                              />
+                            </div>
+                          ))}
                         </div>
-                        <div>
-                          <div style={{ fontWeight:600, fontSize:'0.9rem' }}>Track stock per size</div>
-                          <div style={{ fontSize:'0.77rem', color:'#aaa' }}>
-                            {form.perSizeStock ? 'Each size has its own stock count' : 'All sizes share the single Stock Count above'}
-                          </div>
-                        </div>
-                      </label>
-                    </div>
-
-                    {/* Per-size stock inputs */}
-                    {form.perSizeStock && (
-                      <div style={{ marginTop:'1rem' }}>
-                        {sizePreview.length === 0 ? (
-                          <p style={{ margin:0, fontSize:'0.8rem', color:'#aaa' }}>Set a valid range above first.</p>
-                        ) : (
-                          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(110px, 1fr))', gap:'0.75rem' }}>
-                            {sizePreview.map(s => {
-                              const entry = form.sizeStock.find(ss => Number(ss.size) === s) || { size: s, stock: 0 };
-                              return (
-                                <div key={s}>
-                                  <label style={{ ...labelStyle, marginBottom: 4 }}>Size {s}</label>
-                                  <input
-                                    type="number" min="0"
-                                    value={entry.stock}
-                                    onChange={e => handleSizeStockChange(s, e.target.value)}
-                                    style={{ ...inputStyle, padding:'0.5rem 0.6rem', fontSize:'0.85rem' }}
-                                  />
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
                       </div>
                     )}
                   </div>
