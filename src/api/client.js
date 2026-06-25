@@ -133,7 +133,7 @@ export const resellerVerifyOtp   = (identifier, otp)   => client.post('/reseller
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
 export const createCategory   = (data)       => client.post('/categories', data);
-export const updateCategory   = (id, data)   => client.put(`/categories/${id}`, data);
+export const updateCategory   = (id, data)   => client.patch(`/categories/${id}`, data);
 export const deleteCategory   = (id)         => client.delete(`/categories/${id}`);
 
 // ── Products ──────────────────────────────────────────────────────────────────
