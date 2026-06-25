@@ -130,6 +130,10 @@ export const rejectReseller = (id)     => client.patch(`/resellers/${id}/reject`
 export const resellerRequestOtp  = (identifier)        => client.post('/resellers/otp/request', { identifier });
 export const resellerVerifyOtp   = (identifier, otp)   => client.post('/resellers/otp/verify',  { identifier, otp });
 
+// ── ADD these alongside the existing reseller exports in client.js ────────────
+export const updateResellerMe = (data) => client.patch('/resellers/me', data);
+export const fetchMyOrders     = (params) => client.get('/orders/my-orders', { params });
+
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
 export const createCategory   = (data)       => client.post('/categories', data);

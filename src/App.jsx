@@ -15,6 +15,7 @@ import Footer             from './components/Footer';
 import TermsAndConditions from './components/TermsAndConditions';
 import CustomerProfile from './components/CustomerProfile';
 import CheckoutCallback from './components/CheckoutCallback';
+import ResellerProfile from './components/ResellerProfile';
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -70,6 +71,7 @@ function AppRoutes() {
         {/* ── Catch-all ──────────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to="/" replace />} />
         <Route path="/profile" element={<CustomerProfile />} />
+        <Route path="/reseller/profile" element={<ResellerProfile />} />
       </Routes>
       <Footer />
     </div>
