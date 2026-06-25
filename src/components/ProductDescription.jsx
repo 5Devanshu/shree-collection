@@ -6,8 +6,6 @@ import NotifyMe              from './NotifyMe';
 import './ProductDescription.css';
 import ProductReviews from './ProductReviews';
 
-const RING_SIZES = [4, 4.5, 5, 5.5, 6, 6.6, 7, 7.7, 8, 8.8];
-
 const ProductDescription = () => {
   const { id }    = useParams();
   const navigate  = useNavigate();
@@ -16,7 +14,8 @@ const ProductDescription = () => {
   const [product,      setProduct]      = useState(null);
   const [loading,      setLoading]      = useState(true);
   const [activeImg,    setActiveImg]    = useState(0);
-  const [selectedSize, setSelectedSize] = useState(5);
+  const [selectedSize, setSelectedSize] = useState(null);
+  const [sizeError,    setSizeError]    = useState('');
   const [wished,       setWished]       = useState(false);
   const [addedToCart,  setAddedToCart]  = useState(false);
 
@@ -30,6 +29,8 @@ const ProductDescription = () => {
         const data = res.data?.product || res.data?.data || res.data;
         setProduct(data);
         setActiveImg(0);
+        setSelectedSize(null);
+        setSizeError('');
       })
       .catch(console.error)
       .finally(() => setLoading(false));
@@ -90,12 +91,30 @@ const ProductDescription = () => {
       ? numericDiscounted
       : numericPrice;
 
-  const outOfStock = product.stock === 0;
+  // ── Sizing — single source of truth: product.sizeEnabled ────────────────
+  // No more guessing from category name ("ring" in slug, etc). Admin sets
+  // this explicitly per product, so desktop and mobile now always agree.
+  const sizingActive = !!product.sizeEnabled && Array.isArray(product.sizes) && product.sizes.length > 0;
+  const sizeLabel     = product.sizeLabel || 'Size';
+  const hasSizeStock  = Array.isArray(product.sizeStock) && product.sizeStock.length > 0;
+
+  // Resolve stock for the currently selected size (falls back to top-level stock
+  // when per-size stock isn't tracked for this product)
+  const stockForSize = (size) => {
+    if (!hasSizeStock) return product.stock ?? 0;
+    const entry = product.sizeStock.find(s => Number(s.size) === Number(size));
+    return entry ? Number(entry.stock) : 0;
+  };
+
+  const selectedSizeStock = selectedSize !== null ? stockForSize(selectedSize) : null;
+  const outOfStock = sizingActive
+    ? (hasSizeStock
+        ? product.sizes.every(s => stockForSize(s) <= 0)   // every size is out
+        : (product.stock ?? 0) === 0)
+    : (product.stock ?? 0) === 0;
+
   const category   = (Array.isArray(categories) ? categories : [])
     .find(c => c.slug === product.categorySlug || c.id === product.categoryId);
-  const isRingType = product.category?.name?.toLowerCase().includes('ring') ||
-                     category?.name?.toLowerCase().includes('ring') ||
-                     product.categorySlug?.includes('ring');
 
   const prev = () => setActiveImg(i => (i - 1 + allImages.length) % allImages.length);
   const next = () => setActiveImg(i => (i + 1) % allImages.length);
@@ -110,16 +129,27 @@ const ProductDescription = () => {
     touchEndX.current   = null;
   };
 
-const handleAddToCart = () => {
-  addToCart(product, 1, displayPrice);   // ← pass resolved price
-  setAddedToCart(true);
-  setTimeout(() => setAddedToCart(false), 2000);
-};
+  const validateSizeSelected = () => {
+    if (sizingActive && selectedSize === null) {
+      setSizeError(`Please select a ${sizeLabel.toLowerCase()}`);
+      return false;
+    }
+    setSizeError('');
+    return true;
+  };
 
-const handleBuyNow = () => {
-  addToCart(product, 1, displayPrice);   // ← pass resolved price
-  navigate('/checkout');
-};
+  const handleAddToCart = () => {
+    if (!validateSizeSelected()) return;
+    addToCart(product, 1, displayPrice, sizingActive ? selectedSize : undefined);
+    setAddedToCart(true);
+    setTimeout(() => setAddedToCart(false), 2000);
+  };
+
+  const handleBuyNow = () => {
+    if (!validateSizeSelected()) return;
+    addToCart(product, 1, displayPrice, sizingActive ? selectedSize : undefined);
+    navigate('/checkout');
+  };
 
   // ── Price block — shared desktop + mobile ────────────────────────────────
   const PriceBlock = ({ mobile = false }) => {
@@ -163,24 +193,56 @@ const handleBuyNow = () => {
     );
   };
 
+  // ── Size selector — shared desktop + mobile, identical logic both places ──
+  // This single component fixes the original bug: previously the mobile view
+  // had its own hardcoded RING_SIZES block, and desktop had no size UI at all.
+  // Now both render this exact block, driven only by product.sizeEnabled.
+  const SizeSelector = ({ mobile = false }) => {
+    if (!sizingActive) return null;
+
+    return (
+      <div className={mobile ? 'mpd-section' : 'pd-size-section'} style={!mobile ? { marginTop: '1.5rem' } : undefined}>
+        <div className={mobile ? 'mpd-size-header' : 'pd-size-header'}>
+          <h3 className={mobile ? 'mpd-section-title' : 'label-md'}>{sizeLabel}</h3>
+        </div>
+        <div className={mobile ? 'mpd-size-grid' : 'pd-size-grid'}>
+          {product.sizes.map(s => {
+            const stockLeft = stockForSize(s);
+            const disabled  = hasSizeStock && stockLeft <= 0;
+            return (
+              <button
+                key={s}
+                type="button"
+                disabled={disabled}
+                className={`${mobile ? 'mpd-size-btn' : 'pd-size-btn'} ${selectedSize === s ? 'active' : ''}`}
+                style={disabled ? { opacity: 0.4, cursor: 'not-allowed', textDecoration: 'line-through' } : undefined}
+                onClick={() => { setSelectedSize(s); setSizeError(''); }}
+              >
+                {s}
+              </button>
+            );
+          })}
+        </div>
+        {sizeError && (
+          <p style={{ color: '#c0392b', fontSize: '0.8rem', marginTop: 8 }}>{sizeError}</p>
+        )}
+        {hasSizeStock && selectedSize !== null && selectedSizeStock > 0 && selectedSizeStock <= 5 && (
+          <p style={{ color: '#92600e', fontSize: '0.8rem', marginTop: 8 }}>
+            Only {selectedSizeStock} left in size {selectedSize}
+          </p>
+        )}
+      </div>
+    );
+  };
+
   // ── Specs block ───────────────────────────────────────────────────────────
   const SpecsBlock = ({ className = '' }) => (
-    (product.sku || product.colour || product.plating || product.stoneType || product.sizes?.length > 0) ? (
+    (product.sku || product.colour || product.plating || product.stoneType) ? (
       <div className={`product-details-list ${className}`} style={{ marginTop: '1rem' }}>
         {product.sku       && <div className="detail-item"><span className="label-md">SKU</span><span className="body-lg">{product.sku}</span></div>}
         {product.colour    && <div className="detail-item"><span className="label-md">Colour</span><span className="body-lg">{product.colour}</span></div>}
         {product.plating   && <div className="detail-item"><span className="label-md">Plating</span><span className="body-lg">{product.plating}</span></div>}
         {product.stoneType && <div className="detail-item"><span className="label-md">Stone Type</span><span className="body-lg">{product.stoneType}</span></div>}
-        {product.sizes?.length > 0 && (
-          <div className="detail-item">
-            <span className="label-md">Sizes</span>
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-              {product.sizes.map((s, i) => (
-                <span key={i} style={{ padding: '2px 10px', border: '1px solid var(--outline)', borderRadius: 4, fontSize: '0.85rem' }}>{s}</span>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     ) : null
   );
@@ -255,11 +317,11 @@ const handleBuyNow = () => {
             <PriceBlock />
 
             <div className="pd-stock">
-              {product.stock > 5
-                ? <span className="status-badge status-delivered">In Stock</span>
-                : product.stock > 0
-                  ? <span className="status-badge status-shipped">Only {product.stock} left</span>
-                  : <span className="status-badge status-pending">Out of Stock</span>}
+              {!outOfStock
+                ? (!hasSizeStock && product.stock > 0 && product.stock <= 5
+                    ? <span className="status-badge status-shipped">Only {product.stock} left</span>
+                    : <span className="status-badge status-delivered">In Stock</span>)
+                : <span className="status-badge status-pending">Out of Stock</span>}
             </div>
 
             {product.description && (
@@ -276,6 +338,9 @@ const handleBuyNow = () => {
                 ))}
               </div>
             )}
+
+            {/* ── Size selector now also rendered on desktop — this was missing entirely before ── */}
+            <SizeSelector />
 
             <SpecsBlock />
 
@@ -335,11 +400,11 @@ const handleBuyNow = () => {
           <PriceBlock mobile />
 
           <div className="mpd-stock">
-            {product.stock > 5
-              ? <span className="mpd-stock-badge in">In Stock</span>
-              : product.stock > 0
-                ? <span className="mpd-stock-badge low">Only {product.stock} left</span>
-                : <span className="mpd-stock-badge out">Out of Stock</span>}
+            {!outOfStock
+              ? (!hasSizeStock && product.stock > 0 && product.stock <= 5
+                  ? <span className="mpd-stock-badge low">Only {product.stock} left</span>
+                  : <span className="mpd-stock-badge in">In Stock</span>)
+              : <span className="mpd-stock-badge out">Out of Stock</span>}
           </div>
 
           {product.description && (
@@ -349,20 +414,8 @@ const handleBuyNow = () => {
             </div>
           )}
 
-          {isRingType && (
-            <div className="mpd-section">
-              <div className="mpd-size-header">
-                <h3 className="mpd-section-title">Ring Size</h3>
-                <button className="mpd-size-guide">Size Guide</button>
-              </div>
-              <div className="mpd-size-grid">
-                {RING_SIZES.map(s => (
-                  <button key={s} className={`mpd-size-btn ${selectedSize === s ? 'active' : ''}`}
-                    onClick={() => setSelectedSize(s)}>{s}</button>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* ── Same SizeSelector component as desktop — same data, same condition ── */}
+          <SizeSelector mobile />
 
           {product.details?.length > 0 && (
             <div className="mpd-section">
@@ -422,7 +475,5 @@ const handleBuyNow = () => {
     </div>
   );
 };
-
-
 
 export default ProductDescription;

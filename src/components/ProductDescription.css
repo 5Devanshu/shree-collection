@@ -546,3 +546,49 @@
   }
   .mpd-buy-btn:hover { filter: brightness(1.08); }
 }
+/* ── ADD to ProductDescription.css — desktop size selector, mirrors mpd-size-* ── */
+
+.pd-size-section {
+  border-top: 1px solid var(--outline-variant, #e8e0d5);
+  padding-top: 1.25rem;
+}
+
+.pd-size-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.pd-size-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.pd-size-btn {
+  min-width: 48px;
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--outline, #d8cdb8);
+  background: #fff;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.pd-size-btn:hover:not(:disabled) {
+  border-color: #735c00;
+}
+
+.pd-size-btn.active {
+  background: #735c00;
+  color: #fff;
+  border-color: #735c00;
+}
+
+.pd-size-btn:disabled {
+  cursor: not-allowed;
+}

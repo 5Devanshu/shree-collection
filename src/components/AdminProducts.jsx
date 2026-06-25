@@ -6,8 +6,16 @@ import {
 
 const EMPTY_FORM = {
   title: '', material: '', category: '', price: '', resellerPrice: '', stock: '10',
-  description: '', isFeatured: false, image: '', gallery: [], sizes: [],
+  description: '', isFeatured: false, image: '', gallery: [],
   colour: '', plating: '', stoneType: '', sku: '',
+  // ── Sizing ──
+  sizeEnabled: false,
+  sizeLabel: '',
+  sizeMin: '',
+  sizeMax: '',
+  sizeStep: '1',
+  perSizeStock: false,   // does admin want individual stock per size?
+  sizeStock: [],          // [{ size, stock }] — only used when perSizeStock is true
 };
 
 const labelStyle = {
@@ -32,6 +40,17 @@ const generateSku = (categoryName, existingProducts) => {
   return `${prefix}-${nextNum}`;
 };
 
+// Live preview of the size list a given range would generate —
+// mirrors generateSizeRange() on the backend so admin sees exactly
+// what will be saved before submitting.
+const previewSizeRange = (min, max, step) => {
+  const lo = Number(min), hi = Number(max), st = Number(step) || 1;
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi < lo || st <= 0) return [];
+  const out = [];
+  for (let v = lo; v <= hi + 1e-9; v = +(v + st).toFixed(2)) out.push(+v.toFixed(2));
+  return out;
+};
+
 const AdminProducts = () => {
   const [products,         setProducts]         = useState([]);
   const [categories,       setCategories]       = useState([]);
@@ -44,7 +63,6 @@ const AdminProducts = () => {
   const [saving,           setSaving]           = useState(false);
   const [imageUploading,   setImageUploading]   = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
-  const [sizeInput,        setSizeInput]        = useState('');
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -83,11 +101,18 @@ const AdminProducts = () => {
       isFeatured:    p.isFeatured   || false,
       image:         p.imageUrl     || p.image?.url || p.image || '',
       gallery:       Array.isArray(p.gallery) ? p.gallery : [],
-      sizes:         Array.isArray(p.sizes)   ? p.sizes   : [],
       colour:        p.colour    || '',
       plating:       p.plating   || '',
       stoneType:     p.stoneType || '',
       sku:           p.sku       || '',
+      // ── Sizing ──
+      sizeEnabled:   p.sizeEnabled || false,
+      sizeLabel:     p.sizeLabel   || '',
+      sizeMin:       p.sizeMin     ?? '',
+      sizeMax:       p.sizeMax     ?? '',
+      sizeStep:      p.sizeStep    ?? '1',
+      perSizeStock:  Array.isArray(p.sizeStock) && p.sizeStock.length > 0,
+      sizeStock:     Array.isArray(p.sizeStock) ? p.sizeStock : [],
     });
     setEditingId(p.id);
     setFormError(''); setShowModal(true);
@@ -95,7 +120,7 @@ const AdminProducts = () => {
 
   const closeModal = () => {
     setShowModal(false); setEditingId(null);
-    setForm(EMPTY_FORM); setFormError(''); setSizeInput('');
+    setForm(EMPTY_FORM); setFormError('');
   };
 
   const handleChange = (e) => {
@@ -109,6 +134,45 @@ const AdminProducts = () => {
       return updated;
     });
     setFormError('');
+  };
+
+  // Toggling sizing on auto-suggests a label from the selected category,
+  // e.g. "Necklace" → "Necklace Size". Admin can still edit it freely.
+  const handleToggleSizeEnabled = () => {
+    setForm(prev => {
+      const next = !prev.sizeEnabled;
+      let label = prev.sizeLabel;
+      if (next && !label) {
+        const cat = categories.find(c => c.id === prev.category);
+        label = cat ? `${cat.name.replace(/s$/i, '')} Size` : 'Size';
+      }
+      return { ...prev, sizeEnabled: next, sizeLabel: label };
+    });
+  };
+
+  const handleTogglePerSizeStock = () => {
+    setForm(prev => {
+      const enabling = !prev.perSizeStock;
+      const sizes = previewSizeRange(prev.sizeMin, prev.sizeMax, prev.sizeStep);
+      return {
+        ...prev,
+        perSizeStock: enabling,
+        sizeStock: enabling
+          ? sizes.map(s => {
+              const existing = prev.sizeStock.find(ss => Number(ss.size) === s);
+              return { size: s, stock: existing ? existing.stock : 0 };
+            })
+          : [],
+      };
+    });
+  };
+
+  const handleSizeStockChange = (size, value) => {
+    const val = Number(value) || 0;
+    setForm(prev => {
+      const others = prev.sizeStock.filter(ss => Number(ss.size) !== size);
+      return { ...prev, sizeStock: [...others, { size, stock: val }].sort((a, b) => a.size - b.size) };
+    });
   };
 
   const handleImageUpload = async (e) => {
@@ -149,6 +213,12 @@ const AdminProducts = () => {
     if (!form.category)     return setFormError('Please select a category.');
     if (!form.price)        return setFormError('Price is required.');
     if (!form.image)        return setFormError('Please upload a product image.');
+    if (form.sizeEnabled && (form.sizeMin === '' || form.sizeMax === '')) {
+      return setFormError('Please set both a "From" and "To" size, or turn off sizing.');
+    }
+    if (form.sizeEnabled && Number(form.sizeMax) < Number(form.sizeMin)) {
+      return setFormError('"To" size must be greater than or equal to "From" size.');
+    }
 
     setSaving(true);
     try {
@@ -163,11 +233,17 @@ const AdminProducts = () => {
         isFeatured:    form.isFeatured,
         gallery:       Array.isArray(form.gallery) ? form.gallery : [],
         stock:         Number(form.stock) || 0,
-        sizes:         Array.isArray(form.sizes) ? form.sizes : [],
         colour:        form.colour.trim(),
         plating:       form.plating.trim(),
         stoneType:     form.stoneType.trim(),
         sku:           form.sku.trim(),
+        // ── Sizing — backend derives the flat `sizes` array from this range ──
+        sizeEnabled:   form.sizeEnabled,
+        sizeLabel:     form.sizeLabel.trim(),
+        sizeMin:       form.sizeEnabled ? Number(form.sizeMin) : null,
+        sizeMax:       form.sizeEnabled ? Number(form.sizeMax) : null,
+        sizeStep:      form.sizeEnabled ? (Number(form.sizeStep) || 1) : 1,
+        sizeStock:     form.sizeEnabled && form.perSizeStock ? form.sizeStock : [],
       };
       if (editingId) { await updateProduct(editingId, payload); }
       else           { await createProduct(payload); }
@@ -201,6 +277,8 @@ const AdminProducts = () => {
     out_of_stock: { text: 'Out of Stock', cls: 'status-pending'   },
   }[s] || { text: 'In Stock', cls: 'status-delivered' });
 
+  const sizePreview = previewSizeRange(form.sizeMin, form.sizeMax, form.sizeStep);
+
   return (
     <div className="admin-content">
 
@@ -233,7 +311,7 @@ const AdminProducts = () => {
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr style={{ background:'#faf7f2', borderBottom:'1px solid #e8e0d5' }}>
-                {['Image','Product Name','Category','Price','Stock','Featured','Actions'].map(h => (
+                {['Image','Product Name','Category','Price','Stock','Sizes','Featured','Actions'].map(h => (
                   <th key={h} style={{ padding:'0.85rem 1rem', textAlign:'left', fontSize:'0.72rem', fontWeight:700, letterSpacing:'0.06em', color:'#888', textTransform:'uppercase' }}>
                     {h}
                   </th>
@@ -242,7 +320,7 @@ const AdminProducts = () => {
             </thead>
             <tbody>
               {products.length === 0 ? (
-                <tr><td colSpan={7} style={{ padding:'3rem', textAlign:'center', color:'#aaa' }}>
+                <tr><td colSpan={8} style={{ padding:'3rem', textAlign:'center', color:'#aaa' }}>
                   No products yet. Click "+ Add Product" to get started.
                 </td></tr>
               ) : products.map((p, i) => {
@@ -284,6 +362,20 @@ const AdminProducts = () => {
                         <span style={{ fontSize:'0.75rem', color:'#aaa' }}>Qty: {p.stock ?? '—'}</span>
                       </div>
                     </td>
+
+                    {/* ── Sizes column ── */}
+                    <td style={{ padding:'0.75rem 1rem', fontSize:'0.8rem', color:'#666' }}>
+                      {p.sizeEnabled && Array.isArray(p.sizes) && p.sizes.length > 0 ? (
+                        <div>
+                          <div style={{ fontWeight:600, color:'#735c00' }}>{p.sizeLabel || 'Size'}</div>
+                          <div style={{ color:'#aaa', marginTop:2 }}>
+                            {p.sizes[0]}–{p.sizes[p.sizes.length - 1]}
+                            {Array.isArray(p.sizeStock) && p.sizeStock.length > 0 ? ' · per-size stock' : ''}
+                          </div>
+                        </div>
+                      ) : '—'}
+                    </td>
+
                     <td style={{ padding:'0.75rem 1rem', textAlign:'center' }}>
                       <button onClick={() => handleToggleFeatured(p.id, p.isFeatured)}
                         style={{ background:'none', border:'none', cursor:'pointer', fontSize:'1.3rem', color: p.isFeatured ? '#b39d00' : '#ccc' }}
@@ -418,7 +510,11 @@ const AdminProducts = () => {
                 <div>
                   <label style={labelStyle}>Stock Count</label>
                   <input name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="e.g. 10" min="0" style={inputStyle} />
-                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>0 = Out · 1–5 = Low · 6+ = In Stock</p>
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                    {form.sizeEnabled && form.perSizeStock
+                      ? 'Used as fallback only — per-size stock below takes priority'
+                      : '0 = Out · 1–5 = Low · 6+ = In Stock'}
+                  </p>
                 </div>
               </div>
 
@@ -462,37 +558,140 @@ const AdminProducts = () => {
                   style={{ ...inputStyle, resize:'vertical', lineHeight:1.6 }} />
               </div>
 
-              {/* Sizes */}
+              {/* ── Sizes — range picker replacing free-text input ── */}
               <div style={{ marginBottom:'1.5rem' }}>
-                <label style={labelStyle}>Sizes <span style={{ fontWeight:400, textTransform:'none' }}>(optional)</span></label>
-                <div style={{ display:'flex', flexWrap:'wrap', gap:'0.5rem', marginBottom:'1rem' }}>
-                  {form.sizes.map((size, idx) => (
-                    <span key={idx} style={{ display:'inline-flex', alignItems:'center', gap:'6px', padding:'4px 12px', border:'1px solid #735c00', borderRadius:'4px', fontSize:'0.85rem', backgroundColor:'#faf7f2', color:'#333' }}>
-                      {size}
-                      <button type="button" onClick={() => setForm(prev => ({ ...prev, sizes: prev.sizes.filter((_, i) => i !== idx) }))}
-                        style={{ background:'none', border:'none', cursor:'pointer', color:'#999', lineHeight:1, fontSize:'1rem' }}>×</button>
-                    </span>
-                  ))}
+                <label style={labelStyle}>Sizes</label>
+
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: form.sizeEnabled ? '1rem' : 0 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
+                    <div onClick={handleToggleSizeEnabled}
+                      style={{ width:44, height:24, borderRadius:12, cursor:'pointer', background: form.sizeEnabled ? '#735c00' : '#ddd', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+                      <div style={{ position:'absolute', top:2, left: form.sizeEnabled ? 22 : 2, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:'0.9rem' }}>This product has sizes</div>
+                      <div style={{ fontSize:'0.77rem', color:'#aaa' }}>
+                        {form.sizeEnabled ? 'Customers will choose a size before buying' : 'No size selector will be shown to customers'}
+                      </div>
+                    </div>
+                  </label>
                 </div>
-                <div style={{ display:'flex', gap:'0.5rem' }}>
-                  <input type="text" placeholder="e.g. S, M, L or 5, 6, 7" value={sizeInput}
-                    onChange={(e) => setSizeInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ',') {
-                        e.preventDefault();
-                        const val = sizeInput.trim();
-                        if (val && !form.sizes.includes(val)) setForm(prev => ({ ...prev, sizes: [...prev.sizes, val] }));
-                        setSizeInput('');
-                      }
-                    }}
-                    style={{ flex:1, ...inputStyle }} />
-                  <button type="button" onClick={() => {
-                    const val = sizeInput.trim();
-                    if (val && !form.sizes.includes(val)) setForm(prev => ({ ...prev, sizes: [...prev.sizes, val] }));
-                    setSizeInput('');
-                  }} style={{ padding:'0.65rem 1.4rem', borderRadius:6, background:'#faf7f2', border:'1px solid #e0d5c5', fontFamily:'inherit', fontSize:'0.9rem', fontWeight:500, cursor:'pointer' }}>Add</button>
-                </div>
-                <p style={{ margin:'0.5rem 0 0', fontSize:'0.75rem', color:'#aaa' }}>Press Enter or comma to add. Leave empty if not applicable.</p>
+
+                {form.sizeEnabled && (
+                  <div style={{ padding:'1rem', background:'#faf7f2', border:'1px solid #e8e0d5', borderRadius:8 }}>
+
+                    {/* Size label */}
+                    <div style={{ marginBottom:'1rem' }}>
+                      <label style={labelStyle}>Size Label</label>
+                      <input
+                        name="sizeLabel"
+                        value={form.sizeLabel}
+                        onChange={handleChange}
+                        placeholder="e.g. Necklace Size, Bangle Size, Ring Size"
+                        style={{ ...inputStyle, maxWidth: 320 }}
+                      />
+                      <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                        Shown to customers above the size selector. Auto-filled from category, editable.
+                      </p>
+                    </div>
+
+                    {/* Range pickers */}
+                    <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:'1rem', marginBottom:'1rem' }}>
+                      <div>
+                        <label style={labelStyle}>From</label>
+                        <input
+                          name="sizeMin" type="number" step="0.5"
+                          value={form.sizeMin}
+                          onChange={handleChange}
+                          placeholder="e.g. 1"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>To</label>
+                        <input
+                          name="sizeMax" type="number" step="0.5"
+                          value={form.sizeMax}
+                          onChange={handleChange}
+                          placeholder="e.g. 10"
+                          style={inputStyle}
+                        />
+                      </div>
+                      <div>
+                        <label style={labelStyle}>Step</label>
+                        <input
+                          name="sizeStep" type="number" step="0.5" min="0.5"
+                          value={form.sizeStep}
+                          onChange={handleChange}
+                          placeholder="1"
+                          style={inputStyle}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Live preview of generated sizes */}
+                    {form.sizeMin !== '' && form.sizeMax !== '' && (
+                      <div style={{ marginBottom:'1rem' }}>
+                        <label style={labelStyle}>Preview</label>
+                        {sizePreview.length > 0 ? (
+                          <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
+                            {sizePreview.map(s => (
+                              <span key={s} style={{ padding:'4px 12px', border:'1px solid #735c00', borderRadius:4, fontSize:'0.85rem', background:'#fff' }}>
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p style={{ margin:0, fontSize:'0.8rem', color:'#c0392b' }}>
+                            Enter a valid range ("To" must be greater than or equal to "From").
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Per-size stock toggle */}
+                    <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:'1rem', paddingTop:'1rem', borderTop:'1px solid #e8e0d5' }}>
+                      <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
+                        <div onClick={handleTogglePerSizeStock}
+                          style={{ width:44, height:24, borderRadius:12, cursor:'pointer', background: form.perSizeStock ? '#735c00' : '#ddd', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+                          <div style={{ position:'absolute', top:2, left: form.perSizeStock ? 22 : 2, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }} />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight:600, fontSize:'0.9rem' }}>Track stock per size</div>
+                          <div style={{ fontSize:'0.77rem', color:'#aaa' }}>
+                            {form.perSizeStock ? 'Each size has its own stock count' : 'All sizes share the single Stock Count above'}
+                          </div>
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Per-size stock inputs */}
+                    {form.perSizeStock && (
+                      <div style={{ marginTop:'1rem' }}>
+                        {sizePreview.length === 0 ? (
+                          <p style={{ margin:0, fontSize:'0.8rem', color:'#aaa' }}>Set a valid range above first.</p>
+                        ) : (
+                          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(110px, 1fr))', gap:'0.75rem' }}>
+                            {sizePreview.map(s => {
+                              const entry = form.sizeStock.find(ss => Number(ss.size) === s) || { size: s, stock: 0 };
+                              return (
+                                <div key={s}>
+                                  <label style={{ ...labelStyle, marginBottom: 4 }}>Size {s}</label>
+                                  <input
+                                    type="number" min="0"
+                                    value={entry.stock}
+                                    onChange={e => handleSizeStockChange(s, e.target.value)}
+                                    style={{ ...inputStyle, padding:'0.5rem 0.6rem', fontSize:'0.85rem' }}
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Actions */}
@@ -509,6 +708,5 @@ const AdminProducts = () => {
     </div>
   );
 };
-
 
 export default AdminProducts;
