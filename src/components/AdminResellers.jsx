@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { fetchResellers, verifyReseller, rejectReseller } from '../api/client';
+import { fetchResellers, verifyReseller, rejectReseller, deleteReseller } from '../api/client';
 
 const STATUS_TABS = ['pending', 'verified', 'rejected', 'all'];
 
@@ -47,6 +47,24 @@ const AdminResellers = () => {
       await load();
     } catch (err) {
       setMessage(err.message || 'Action failed');
+    } finally {
+      setActionId(null);
+    }
+  };
+
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(
+      `Permanently remove "${name}"? This cannot be undone. Their past orders will remain in the system, but they will no longer be able to log in or get reseller pricing.`
+    )) return;
+
+    setActionId(id);
+    setMessage('');
+    try {
+      const res = await deleteReseller(id);
+      setMessage(res.data?.message || 'Reseller removed.');
+      setResellers(prev => prev.filter(r => r.id !== id));
+    } catch (err) {
+      setMessage(err?.response?.data?.message || err.message || 'Failed to remove reseller.');
     } finally {
       setActionId(null);
     }
@@ -108,7 +126,7 @@ const AdminResellers = () => {
                           {actionId === r.id ? '…' : 'Verify'}
                         </button>
                         <button className="btn btn-secondary"
-                          style={{ padding: '6px 14px', color: '#b3261e' }}
+                          style={{ padding: '6px 14px', color: '#b3261e', marginRight: 8 }}
                           disabled={actionId === r.id}
                           onClick={() => handleAction(r.id, 'reject')}>
                           Reject
@@ -116,16 +134,24 @@ const AdminResellers = () => {
                       </>
                     ) : r.status === 'rejected' ? (
                       <button className="btn btn-secondary"
-                        style={{ padding: '6px 14px' }}
+                        style={{ padding: '6px 14px', marginRight: 8 }}
                         disabled={actionId === r.id}
                         onClick={() => handleAction(r.id, 'verify')}>
                         Verify Anyway
                       </button>
                     ) : (
-                      <span style={{ color: '#888', fontSize: '0.8rem' }}>
+                      <span style={{ color: '#888', fontSize: '0.8rem', marginRight: 8 }}>
                         Verified {r.verifiedAt ? new Date(r.verifiedAt).toLocaleDateString('en-IN') : ''}
                       </span>
                     )}
+
+                    {/* ── Remove — available regardless of status ── */}
+                    <button className="btn btn-secondary"
+                      style={{ padding: '6px 14px', color: '#b3261e', borderColor: '#f3c6c2' }}
+                      disabled={actionId === r.id}
+                      onClick={() => handleDelete(r.id, r.name)}>
+                      {actionId === r.id ? '…' : 'Remove'}
+                    </button>
                   </td>
                 </tr>
               ))}

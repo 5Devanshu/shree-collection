@@ -133,6 +133,7 @@ export const resellerVerifyOtp   = (identifier, otp)   => client.post('/reseller
 // ── ADD these alongside the existing reseller exports in client.js ────────────
 export const updateResellerMe = (data) => client.patch('/resellers/me', data);
 export const fetchMyOrders     = (params) => client.get('/orders/my-orders', { params });
+export const deleteReseller = (id) => client.delete(`/resellers/${id}`);
 
 // ── Categories ────────────────────────────────────────────────────────────────
 export const fetchCategories  = ()           => client.get('/categories');
