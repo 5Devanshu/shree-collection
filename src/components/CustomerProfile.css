@@ -214,3 +214,22 @@
   .profile-field-row { grid-template-columns: 1fr; gap: 2px; }
   .profile-label { font-size: 0.75rem; }
 }
+/* ── ADD to CustomerProfile.css — order history list ── */
+
+.profile-orders-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.profile-order-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--outline-variant, #e8e0d5);
+}
+
+.profile-order-row:last-child {
+  border-bottom: none;
+}

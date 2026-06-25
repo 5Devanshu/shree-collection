@@ -1,8 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
-import { getCustomerMe, updateCustomerMe, changeCustomerPassword } from '../api/client';
+import { getCustomerMe, updateCustomerMe, changeCustomerPassword, fetchMyCustomerOrders } from '../api/client';
 import './CustomerProfile.css';
+
+const STATUS_LABEL = {
+  pending:    'Pending',
+  confirmed:  'Confirmed',
+  shipped:    'Shipped',
+  delivered:  'Delivered',
+  cancelled:  'Cancelled',
+};
 
 const CustomerProfile = () => {
   const navigate = useNavigate();
@@ -21,6 +29,11 @@ const CustomerProfile = () => {
   const [saving, setSaving] = useState(false);
   const [error,  setError]  = useState('');
   const [success, setSuccess] = useState('');
+
+  // ── Orders ──────────────────────────────────────────────────────────────────
+  const [orders,        setOrders]        = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(true);
+  const [ordersError,   setOrdersError]   = useState('');
 
   // Redirect if not logged in
   useEffect(() => {
@@ -46,6 +59,18 @@ const CustomerProfile = () => {
       })
       .catch(() => logoutCustomer())
       .finally(() => setLoading(false));
+  }, []);
+
+  // Fetch order history
+  useEffect(() => {
+    if (!customer) return;
+    fetchMyCustomerOrders({ limit: 50 })
+      .then(res => {
+        const data = res.data?.orders || res.data?.data || [];
+        setOrders(Array.isArray(data) ? data : []);
+      })
+      .catch(() => setOrdersError('Failed to load your orders.'))
+      .finally(() => setLoadingOrders(false));
   }, []);
 
   const run = async (fn) => {
@@ -244,6 +269,48 @@ const CustomerProfile = () => {
             </div>
           ) : (
             <p className="body-sm profile-empty">No address saved yet.</p>
+          )}
+        </section>
+
+        {/* ── My Orders ─────────────────────────────────────────────────── */}
+        <section className="profile-section">
+          <div className="profile-section-header">
+            <h2 className="label-lg">My Orders</h2>
+          </div>
+
+          {ordersError && <p className="profile-error">{ordersError}</p>}
+
+          {loadingOrders ? (
+            <p className="body-sm profile-empty">Loading your orders…</p>
+          ) : orders.length === 0 ? (
+            <p className="body-sm profile-empty">You haven't placed any orders yet.</p>
+          ) : (
+            <div className="profile-orders-list">
+              {orders.map(order => (
+                <div key={order.id} className="profile-order-row">
+                  <div>
+                    <div className="body-sm" style={{ fontWeight: 600 }}>
+                      Order {order.orderNumber}
+                    </div>
+                    <div className="body-sm profile-meta" style={{ marginTop: 2 }}>
+                      {order.createdAt
+                        ? new Date(order.createdAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                        : ''}
+                      {' · '}
+                      {Array.isArray(order.items) ? order.items.length : 0} item{Array.isArray(order.items) && order.items.length !== 1 ? 's' : ''}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div className="body-sm" style={{ fontWeight: 600 }}>
+                      ₹{Number(order.total || 0).toLocaleString('en-IN')}
+                    </div>
+                    <div className="body-sm profile-meta" style={{ marginTop: 2 }}>
+                      {STATUS_LABEL[order.status] || order.status}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </section>
 
