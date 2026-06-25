@@ -57,8 +57,13 @@ const Checkout = () => {
     } catch { /* ignore */ }
   }, []);
 
-  const items    = cart?.items    || [];
-  const subtotal = cart?.subtotal || 0;
+  const items = cart?.items || [];
+
+  // ── Coerce to Number — Sequelize DECIMAL columns are returned as strings
+  // (e.g. "440.00") over JSON. Without this, `subtotal + deliveryCharge`
+  // below becomes string concatenation ("440.00" + 90 === "440.0090")
+  // instead of numeric addition, corrupting every total on this page.
+  const subtotal = Number(cart?.subtotal) || 0;
 
   const deliveryCharge = calcDelivery(subtotal, isReseller, form.state);
   const grandTotal     = subtotal + deliveryCharge;
@@ -91,7 +96,7 @@ const Checkout = () => {
       const orderItems = items.map(item => ({
         productId: item.productId || item.product?._id || item.product,
         title:     item.title,
-        price:     item.price,
+        price:     Number(item.price) || 0,
         quantity:  item.quantity,
         image:     item.image || '',
       }));
@@ -261,6 +266,7 @@ const Checkout = () => {
               <p className="body-md" style={{ color: 'var(--on-surface-variant)' }}>Loading cart…</p>
             ) : items.map((item, i) => {
               const productId = item.productId || item.product?._id || item.product;
+              const itemPrice = Number(item.price) || 0;
               return (
                 <div className="summary-item" key={productId || i}>
 
@@ -300,7 +306,7 @@ const Checkout = () => {
                   </div>
 
                   <div className="summary-item-price">
-                    ₹{(item.price * item.quantity).toLocaleString('en-IN')}
+                    ₹{(itemPrice * item.quantity).toLocaleString('en-IN')}
                   </div>
 
                 </div>

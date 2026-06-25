@@ -347,3 +347,33 @@
 @media (max-width: 480px) {
   .category-grid { grid-template-columns: 1fr 1fr; gap: 0.75rem; }
 }
+
+/* ── ADD to CategoryPage.css — free shipping banner ── */
+
+.free-shipping-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+  padding: 0.7rem 1.25rem;
+  border-radius: 8px;
+  margin: 0 auto 1.5rem;
+  max-width: 1200px;
+  text-align: center;
+}
+
+.free-shipping-banner-icon {
+  font-size: 1rem;
+  line-height: 1;
+}
+
+@media (max-width: 640px) {
+  .free-shipping-banner {
+    margin: 0 1rem 1.25rem;
+    padding: 0.6rem 1rem;
+    font-size: 0.85rem;
+  }
+}

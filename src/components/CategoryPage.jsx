@@ -12,6 +12,10 @@ const PRESET_RANGES = [
   { label: 'Above ₹1,00,000',     min: 100000, max: Infinity  },
 ];
 
+// Mirrors the same ₹500 free-shipping threshold used in Checkout.jsx's
+// calcDelivery() — kept here as a display-only constant for the banner copy.
+const FREE_SHIPPING_THRESHOLD = 500;
+
 const CategoryPage = () => {
   const { category }                           = useParams();
   const { products, categories, loadingProds } = useStore();
@@ -145,6 +149,14 @@ let list = isAll
           {displayed.length} piece{displayed.length !== 1 ? 's' : ''}
         </p>
       </header>
+
+      {/* ── Free shipping banner ──────────────────────────────────────────── */}
+      <div className="free-shipping-banner">
+        <span className="free-shipping-banner-icon">🚚</span>
+        <span className="label-md">
+          Free shipping on orders above ₹{FREE_SHIPPING_THRESHOLD.toLocaleString('en-IN')}
+        </span>
+      </div>
 
       <div className="category-layout">
 
