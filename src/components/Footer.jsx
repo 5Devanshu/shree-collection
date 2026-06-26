@@ -15,16 +15,19 @@ const Footer = () => {
             Luxury jewelry and accessories crafted with elegance and precision. Discover our exquisite collection of fine jewelry.
           </p>
           <div className="social-links">
-            <a href="https://www.youtube.com/@shreecollection_byaarya?si=JzQABtjVoHYNV1Yl" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
-              <i className="fab fa-youtube"></i>
-            </a>
-            <a href="https://www.instagram.com/shreecollection_byaarya?igsh=eDYyZjg3bW5jbHR4" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
-              <i className="fab fa-instagram"></i>
-            </a>
-            <a href="https://www.facebook.com/share/18VUQvxGWN/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
-              <i className="fab fa-facebook"></i>
-            </a>
-          </div>
+  <a href="https://www.youtube.com/@shreecollection_byaarya?si=JzQABtjVoHYNV1Yl" target="_blank" rel="noopener noreferrer" aria-label="YouTube">
+    <i className="fab fa-youtube"></i>
+  </a>
+  <a href="https://www.instagram.com/shreecollection_byaarya?igsh=eDYyZjg3bW5jbHR4" target="_blank" rel="noopener noreferrer" aria-label="Instagram">
+    <i className="fab fa-instagram"></i>
+  </a>
+  <a href="https://www.facebook.com/share/18VUQvxGWN/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
+    <i className="fab fa-facebook"></i>
+  </a>
+  <a href="https://wa.me/message/5DPIE5HXKGFDP1" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+    <i className="fab fa-whatsapp"></i>
+  </a>
+</div>
         </div>
 
         {/* Quick Links */}
