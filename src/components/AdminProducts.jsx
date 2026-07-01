@@ -551,10 +551,10 @@ const AdminProducts = () => {
                 </div>
                 <div>
                   <label style={labelStyle}>Stock Count</label>
-                  <input name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="e.g. 10" min="0" style={inputStyle} />
-                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
-                    {form.sizeEnabled && form.sizeStock.length > 0
-                      ? 'Used as fallback only — per-size stock below takes priority'
+                  <input name="stock" type="number" value={form.stock} onChange={handleChange} placeholder="e.g. 10" min="0" style={inputStyle} disabled={form.sizeEnabled} />
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color: form.sizeEnabled ? '#b39d00' : '#aaa', fontWeight: form.sizeEnabled ? 600 : 400 }}>
+                    {form.sizeEnabled
+                      ? '⚠ Ignored — total stock is the sum of every size\'s stock below'
                       : '0 = Out · 1–5 = Low · 6+ = In Stock'}
                   </p>
                 </div>
@@ -677,6 +677,13 @@ const AdminProducts = () => {
                         <p style={{ margin:'0 0 0.75rem', fontSize:'0.75rem', color:'#aaa' }}>
                           Leave Rate / Reseller Rate at 0 to use the base price above. The "Customer pays / Reseller pays" line on each card shows exactly what will be charged.
                         </p>
+                        <div style={{ marginBottom:'0.75rem', fontSize:'0.8rem', color:'#735c00', fontWeight:600 }}>
+                          Total stock across all sizes: {form.sizeStock.reduce((sum, s) => sum + (Number(s.stock) || 0), 0)}
+                          {' '}
+                          <span style={{ fontWeight:400, color:'#aaa' }}>
+                            (this — not the Stock Count field above — decides the In Stock / Low Stock / Out of Stock badge)
+                          </span>
+                        </div>
                         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:'0.75rem' }}>
                           {form.sizeStock.map((entry) => {
                             const { size, stock, price, resellerPrice } = entry;
