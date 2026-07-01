@@ -72,6 +72,7 @@ const AdminProducts = () => {
 
   const openAdd = () => {
     setForm(EMPTY_FORM); setEditingId(null);
+    setImagePreview('');
     setFormError(''); setShowModal(true);
   };
 
@@ -108,12 +109,14 @@ const AdminProducts = () => {
       newSizeValue: '',
     });
     setEditingId(p.id);
+    setImagePreview(p.imageUrl || p.image?.url || p.image || '');
     setFormError(''); setShowModal(true);
   };
 
   const closeModal = () => {
     setShowModal(false); setEditingId(null);
     setForm(EMPTY_FORM); setFormError('');
+    setImagePreview('');
   };
 
   const handleChange = (e) => {
@@ -146,28 +149,29 @@ const AdminProducts = () => {
   // ── Add a single size chip ──────────────────────────────────────────────
   // Admin types a number (integer or decimal, e.g. 2.4, 2.6, 7, 8.5) and
   // clicks Add (or hits Enter). Duplicate sizes are rejected. New sizes start
-  // with price/resellerPrice at 0, meaning "use the base product price" —
-  // the admin can then type a size-specific rate in the chip if this size
-  // should cost something different.
+  // with price/resellerPrice at 0, meaning "use the base product price".
+  //
+  // IMPORTANT: validation is done OUTSIDE setForm so that setFormError and
+  // setForm don't race each other — calling setFormError inside a setForm
+  // functional updater caused the second size-add to silently stall.
   const handleAddSize = () => {
-    setForm(prev => {
-      const raw = prev.newSizeValue.trim();
-      if (raw === '') return prev;
+    const raw = form.newSizeValue.trim();
+    if (raw === '') return;
 
-      const value = Number(raw);
-      if (!Number.isFinite(value)) {
-        setFormError('Size must be a number (e.g. 2.4, 2.6, 7).');
-        return prev;
-      }
-      if (prev.sizeStock.some(s => s.size === value)) {
-        setFormError(`Size ${value} has already been added.`);
-        return prev;
-      }
+    const value = Number(raw);
+    if (!Number.isFinite(value)) {
+      setFormError('Size must be a number (e.g. 2.4, 2.6, 7).');
+      return;
+    }
+    if (form.sizeStock.some(s => s.size === value)) {
+      setFormError(`Size ${value} has already been added.`);
+      return;
+    }
 
-      const next = [...prev.sizeStock, { size: value, stock: 0, price: 0, resellerPrice: 0 }]
-        .sort((a, b) => a.size - b.size);
-      return { ...prev, sizeStock: next, newSizeValue: '' };
-    });
+    setFormError('');
+    const next = [...form.sizeStock, { size: value, stock: 0, price: 0, resellerPrice: 0 }]
+      .sort((a, b) => a.size - b.size);
+    setForm(prev => ({ ...prev, sizeStock: next, newSizeValue: '' }));
   };
 
   const handleNewSizeKeyDown = (e) => {
@@ -212,17 +216,34 @@ const AdminProducts = () => {
     return { customerPays, resellerPays };
   };
 
+  // ── Image state holds BOTH a blob URL (for immediate local preview) and
+  // the backend-stored URL (for saving). We split these so the <img> tag
+  // never tries to load through the S3 presigned redirect proxy — which
+  // fails in the browser due to expired/CORS presigned URL — and instead
+  // always shows a local blob URL the moment the file is picked.
+  const [imagePreview, setImagePreview] = useState(''); // blob URL — preview only
+
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Show a local blob URL immediately — no network needed, no proxy issues
+    const localPreview = URL.createObjectURL(file);
+    setImagePreview(localPreview);
+
     setImageUploading(true); setFormError('');
     try {
       const fd = new FormData();
       fd.append('image', file); fd.append('folder', 'product');
       const res = await uploadImage(fd);
       const url = res.data?.media?.secureUrl || res.data?.media?.url || '';
+      // Store the backend URL for saving; preview stays as blob URL
       setForm(prev => ({ ...prev, image: url }));
     } catch {
+      // Upload failed — clear preview and stored URL both
+      URL.revokeObjectURL(localPreview);
+      setImagePreview('');
+      setForm(prev => ({ ...prev, image: '' }));
       setFormError('Image upload failed. Please try again.');
     } finally { setImageUploading(false); }
   };
@@ -455,10 +476,17 @@ const AdminProducts = () => {
               {/* Main Image */}
               <div style={{ marginBottom:'1.5rem' }}>
                 <label style={labelStyle}>Product Image (Main) *</label>
-                {form.image ? (
+                {imagePreview ? (
                   <div style={{ position:'relative', marginBottom:'0.75rem' }}>
-                    <img src={form.image} alt="Preview" style={{ width:'100%', height:200, objectFit:'contain', borderRadius:8, border:'2px solid #f0ebe3', background:'#faf7f2' }} />
-                    <button onClick={() => setForm(prev => ({ ...prev, image:'' }))} style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)', color:'#fff', border:'none', borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:'0.8rem' }}>✕</button>
+                    <img
+                      src={imagePreview}
+                      alt="Preview"
+                      style={{ width:'100%', height:200, objectFit:'contain', borderRadius:8, border:'2px solid #f0ebe3', background:'#faf7f2' }}
+                    />
+                    <button
+                      onClick={() => { setImagePreview(''); setForm(prev => ({ ...prev, image:'' })); }}
+                      style={{ position:'absolute', top:8, right:8, background:'rgba(0,0,0,0.6)', color:'#fff', border:'none', borderRadius:'50%', width:28, height:28, cursor:'pointer', fontSize:'0.8rem' }}
+                    >✕</button>
                   </div>
                 ) : (
                   <div style={{ border:'2px dashed #e0d5c5', borderRadius:8, padding:'2rem', textAlign:'center', background:'#faf7f2', marginBottom:'0.75rem' }}>
@@ -467,7 +495,7 @@ const AdminProducts = () => {
                   </div>
                 )}
                 <label style={{ display:'inline-flex', alignItems:'center', gap:8, background:'#faf7f2', border:'1px solid #ddd', borderRadius:6, padding:'0.5rem 1rem', cursor:'pointer', fontSize:'0.85rem', fontWeight:500 }}>
-                  {imageUploading ? '⏳ Uploading…' : '📁 Choose Image'}
+                  {imageUploading ? '⏳ Uploading…' : imagePreview ? '📁 Change Image' : '📁 Choose Image'}
                   <input type="file" accept="image/*" onChange={handleImageUpload} disabled={imageUploading} style={{ display:'none' }} />
                 </label>
               </div>
