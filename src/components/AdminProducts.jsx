@@ -11,7 +11,7 @@ const EMPTY_FORM = {
   // ── Sizing ──
   sizeEnabled: false,
   sizeLabel: '',
-  sizeStock: [],       // [{ size, stock }] — admin adds these one at a time
+  sizeStock: [],       // [{ size, stock, price, resellerPrice }] — admin adds these one at a time
   newSizeValue: '',    // controlled input for the "Add Size" box
 };
 
@@ -95,9 +95,15 @@ const AdminProducts = () => {
       sizeEnabled:   p.sizeEnabled || false,
       sizeLabel:     p.sizeLabel   || '',
       sizeStock:     Array.isArray(p.sizeStock) && p.sizeStock.length > 0
-        ? p.sizeStock.map(s => ({ size: Number(s.size), stock: Number(s.stock) || 0 }))
+        ? p.sizeStock.map(s => ({
+            size:          Number(s.size),
+            stock:         Number(s.stock) || 0,
+            // 0 here means "no override — falls back to the base price"
+            price:         Number(s.price) || 0,
+            resellerPrice: Number(s.resellerPrice) || 0,
+          }))
         : Array.isArray(p.sizes)
-          ? p.sizes.map(s => ({ size: Number(s), stock: 0 })) // legacy products with sizes but no stock yet
+          ? p.sizes.map(s => ({ size: Number(s), stock: 0, price: 0, resellerPrice: 0 })) // legacy products with sizes but no stock yet
           : [],
       newSizeValue: '',
     });
@@ -139,7 +145,10 @@ const AdminProducts = () => {
 
   // ── Add a single size chip ──────────────────────────────────────────────
   // Admin types a number (integer or decimal, e.g. 2.4, 2.6, 7, 8.5) and
-  // clicks Add (or hits Enter). Duplicate sizes are rejected.
+  // clicks Add (or hits Enter). Duplicate sizes are rejected. New sizes start
+  // with price/resellerPrice at 0, meaning "use the base product price" —
+  // the admin can then type a size-specific rate in the chip if this size
+  // should cost something different.
   const handleAddSize = () => {
     setForm(prev => {
       const raw = prev.newSizeValue.trim();
@@ -155,7 +164,7 @@ const AdminProducts = () => {
         return prev;
       }
 
-      const next = [...prev.sizeStock, { size: value, stock: 0 }]
+      const next = [...prev.sizeStock, { size: value, stock: 0, price: 0, resellerPrice: 0 }]
         .sort((a, b) => a.size - b.size);
       return { ...prev, sizeStock: next, newSizeValue: '' };
     });
@@ -175,11 +184,12 @@ const AdminProducts = () => {
     }));
   };
 
-  const handleSizeStockChange = (size, value) => {
+  // Generic updater for any field on a size chip — stock, price, resellerPrice.
+  const handleSizeFieldChange = (size, field, value) => {
     const val = Number(value) || 0;
     setForm(prev => ({
       ...prev,
-      sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, stock: val } : s),
+      sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, [field]: val } : s),
     }));
   };
 
@@ -242,7 +252,10 @@ const AdminProducts = () => {
         plating:       form.plating.trim(),
         stoneType:     form.stoneType.trim(),
         sku:           form.sku.trim(),
-        // ── Sizing — backend derives the flat `sizes` array from sizeStock ──
+        // ── Sizing — backend derives the flat `sizes` array from sizeStock.
+        // Each entry carries { size, stock, price, resellerPrice }; price/
+        // resellerPrice of 0 tells the backend "use the base product rate
+        // for this size" (see product.service.js normalizeSizeStock).
         sizeEnabled:   form.sizeEnabled,
         sizeLabel:     form.sizeLabel.trim(),
         sizeStock:     form.sizeEnabled ? form.sizeStock : [],
@@ -363,7 +376,7 @@ const AdminProducts = () => {
                       </div>
                     </td>
 
-                    {/* ── Sizes column ── */}
+                    {/* ── Sizes column — shows per-size rate overrides at a glance ── */}
                     <td style={{ padding:'0.75rem 1rem', fontSize:'0.8rem', color:'#666' }}>
                       {p.sizeEnabled && Array.isArray(p.sizes) && p.sizes.length > 0 ? (
                         <div>
@@ -371,6 +384,11 @@ const AdminProducts = () => {
                           <div style={{ color:'#aaa', marginTop:2 }}>
                             {p.sizes.join(', ')}
                           </div>
+                          {Array.isArray(p.sizeStock) && p.sizeStock.some(s => Number(s.price) > 0) && (
+                            <div style={{ color:'#b39d00', marginTop:2, fontSize:'0.72rem' }}>
+                              Size-wise rates set
+                            </div>
+                          )}
                         </div>
                       ) : '—'}
                     </td>
@@ -484,6 +502,11 @@ const AdminProducts = () => {
                   <label style={labelStyle}>Customer Price (₹) *</label>
                   <input name="price" type="number" value={form.price} onChange={handleChange}
                     placeholder="e.g. 4200" min="0" style={inputStyle} />
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                    {form.sizeEnabled
+                      ? 'Base rate — sizes below use this unless given their own rate'
+                      : ' '}
+                  </p>
                 </div>
               </div>
 
@@ -497,6 +520,7 @@ const AdminProducts = () => {
                   placeholder="e.g. 3500" min="0" style={{ ...inputStyle, maxWidth:320, background:'#fff' }} />
                 <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#166534' }}>
                   Verified resellers will see this price instead of the customer price when logged in.
+                  {form.sizeEnabled ? ' Sizes below can override this too.' : ''}
                 </p>
               </div>
 
@@ -557,7 +581,7 @@ const AdminProducts = () => {
                   style={{ ...inputStyle, resize:'vertical', lineHeight:1.6 }} />
               </div>
 
-              {/* ── Sizes — admin adds each size individually, with its own stock ── */}
+              {/* ── Sizes — admin adds each size individually, with its own stock + rate ── */}
               <div style={{ marginBottom:'1.5rem' }}>
                 <label style={labelStyle}>Sizes</label>
 
@@ -619,20 +643,23 @@ const AdminProducts = () => {
                         >+ Add Size</button>
                       </div>
                       <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
-                        Enter any number — whole (7, 8) or decimal (2.4, 2.6, 2.8) — then click Add Size. Each size gets its own stock count below.
+                        Enter any number — whole (7, 8) or decimal (2.4, 2.6, 2.8) — then click Add Size. Each size gets its own stock and rate below.
                       </p>
                     </div>
 
-                    {/* Size chips with per-size stock */}
+                    {/* Size chips with per-size stock + rate */}
                     {form.sizeStock.length === 0 ? (
                       <p style={{ margin:0, fontSize:'0.8rem', color:'#c0392b' }}>
                         No sizes added yet. Add at least one size above.
                       </p>
                     ) : (
                       <div>
-                        <label style={labelStyle}>Sizes &amp; Stock</label>
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(130px, 1fr))', gap:'0.75rem' }}>
-                          {form.sizeStock.map(({ size, stock }) => (
+                        <label style={labelStyle}>Sizes, Stock &amp; Rate</label>
+                        <p style={{ margin:'0 0 0.75rem', fontSize:'0.75rem', color:'#aaa' }}>
+                          Leave Rate / Reseller Rate at 0 to use the base price above for that size.
+                        </p>
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:'0.75rem' }}>
+                          {form.sizeStock.map(({ size, stock, price, resellerPrice }) => (
                             <div key={size} style={{ position:'relative', background:'#fff', border:'1px solid #e0d5c5', borderRadius:8, padding:'0.6rem 0.7rem' }}>
                               <button
                                 type="button"
@@ -647,12 +674,31 @@ const AdminProducts = () => {
                               <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:6, color:'#735c00' }}>
                                 {size}
                               </div>
+
                               <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Stock</label>
                               <input
                                 type="number" min="0"
                                 value={stock}
-                                onChange={e => handleSizeStockChange(size, e.target.value)}
-                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem' }}
+                                onChange={e => handleSizeFieldChange(size, 'stock', e.target.value)}
+                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', marginBottom:8 }}
+                              />
+
+                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Rate (₹)</label>
+                              <input
+                                type="number" min="0"
+                                value={price || ''}
+                                placeholder={form.price ? `${form.price} (base)` : '0'}
+                                onChange={e => handleSizeFieldChange(size, 'price', e.target.value)}
+                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', marginBottom:8 }}
+                              />
+
+                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3, color:'#166534' }}>Reseller Rate (₹)</label>
+                              <input
+                                type="number" min="0"
+                                value={resellerPrice || ''}
+                                placeholder={form.resellerPrice ? `${form.resellerPrice} (base)` : '0'}
+                                onChange={e => handleSizeFieldChange(size, 'resellerPrice', e.target.value)}
+                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', background:'#f0fdf4', borderColor:'#bbf7d0' }}
                               />
                             </div>
                           ))}
