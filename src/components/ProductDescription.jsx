@@ -106,6 +106,44 @@ const ProductDescription = () => {
     return entry ? Number(entry.stock) : 0;
   };
 
+  // ── Size-wise rates ───────────────────────────────────────────────────────
+  // Each sizeStock entry carries its own `displayPrice`, computed server-side
+  // (product.service.js → applyDisplayPrice) so reseller/discount logic never
+  // has to be duplicated here. `price` is the size's raw retail override (0 =
+  // no override, this size just uses the product's base price).
+  const getSizeEntry = (size) => {
+    if (!hasSizeStock || size === null || size === undefined) return null;
+    return product.sizeStock.find(s => Number(s.size) === Number(size)) || null;
+  };
+
+  // The "full" retail rate for a given size — used as the strike-through
+  // original price when that size is discounted or reseller-priced.
+  const sizeRetailPrice = (entry) =>
+    entry && Number(entry.price) > 0 ? Number(entry.price) : numericPrice;
+
+  const selectedSizeEntry = getSizeEntry(selectedSize);
+
+  // Before a size is picked, show the base product price as a starting point.
+  // Once a size is picked, its own displayPrice (already reseller/discount
+  // aware from the backend) takes over.
+  const activePrice = sizingActive && selectedSizeEntry && typeof selectedSizeEntry.displayPrice === 'number'
+    ? selectedSizeEntry.displayPrice
+    : displayPrice;
+
+  const activeOriginal = sizingActive && selectedSizeEntry
+    ? sizeRetailPrice(selectedSizeEntry)
+    : numericPrice;
+
+  // Reseller badge for the active price: either this size has its own
+  // reseller rate, or (when the size has no retail override) the product's
+  // flat reseller rate applies.
+  const activeIsReseller = isReseller && sizingActive && selectedSizeEntry
+    ? (Number(selectedSizeEntry.resellerPrice) > 0 ||
+       (numericReseller > 0 && !(Number(selectedSizeEntry.price) > 0)))
+    : showResellerPrice;
+
+  const activeHasDiscount = !activeIsReseller && product.discountEnabled && product.discountPercent > 0 && activePrice < activeOriginal;
+
   const selectedSizeStock = selectedSize !== null ? stockForSize(selectedSize) : null;
   const outOfStock = sizingActive
     ? (hasSizeStock
@@ -140,14 +178,14 @@ const ProductDescription = () => {
 
   const handleAddToCart = () => {
     if (!validateSizeSelected()) return;
-    addToCart(product, 1, displayPrice, sizingActive ? selectedSize : undefined);
+    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined);
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
   const handleBuyNow = () => {
     if (!validateSizeSelected()) return;
-    addToCart(product, 1, displayPrice, sizingActive ? selectedSize : undefined);
+    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined);
     navigate('/checkout');
   };
 
@@ -158,13 +196,13 @@ const ProductDescription = () => {
     const origClass    = mobile ? 'mpd-original-price' : 'pd-original-price';
     const pillClass    = mobile ? 'mpd-discount-pill'  : '';
 
-    if (showResellerPrice) return (
+    if (activeIsReseller) return (
       <div className={rowClass} style={{ alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <span className={priceClass} style={{ color: '#2e7d32' }}>
-          ₹{numericReseller.toLocaleString('en-IN')}
+          ₹{activePrice.toLocaleString('en-IN')}
         </span>
         <span className={origClass}>
-          ₹{numericPrice.toLocaleString('en-IN')}
+          ₹{activeOriginal.toLocaleString('en-IN')}
         </span>
         <span style={{ fontSize: '0.7rem', color: '#2e7d32', fontWeight: 700,
           letterSpacing: '0.08em', padding: '2px 8px', background: '#f0fdf4',
@@ -174,13 +212,13 @@ const ProductDescription = () => {
       </div>
     );
 
-    if (hasDiscount) return (
+    if (activeHasDiscount) return (
       <div className={rowClass}>
         <span className={mobile ? 'mpd-price' : 'headline-md'} style={{ color: 'var(--primary)' }}>
-          ₹{numericDiscounted.toLocaleString('en-IN')}
+          ₹{activePrice.toLocaleString('en-IN')}
         </span>
         <span className={origClass}>
-          ₹{numericPrice.toLocaleString('en-IN')}
+          ₹{activeOriginal.toLocaleString('en-IN')}
         </span>
         {mobile && <span className={pillClass}>{product.discountPercent}% OFF</span>}
       </div>
@@ -188,7 +226,7 @@ const ProductDescription = () => {
 
     return (
       <p className={priceClass}>
-        ₹{numericPrice.toLocaleString('en-IN')}
+        ₹{activePrice.toLocaleString('en-IN')}
       </p>
     );
   };
@@ -197,6 +235,9 @@ const ProductDescription = () => {
   // This single component fixes the original bug: previously the mobile view
   // had its own hardcoded RING_SIZES block, and desktop had no size UI at all.
   // Now both render this exact block, driven only by product.sizeEnabled.
+  // Each chip also shows its own rate whenever that size's price differs from
+  // the product's base price, so the customer sees size-wise pricing before
+  // they even pick one.
   const SizeSelector = ({ mobile = false }) => {
     if (!sizingActive) return null;
 
@@ -207,18 +248,30 @@ const ProductDescription = () => {
         </div>
         <div className={mobile ? 'mpd-size-grid' : 'pd-size-grid'}>
           {product.sizes.map(s => {
-            const stockLeft = stockForSize(s);
-            const disabled  = hasSizeStock && stockLeft <= 0;
+            const entry      = getSizeEntry(s);
+            const stockLeft  = stockForSize(s);
+            const disabled   = hasSizeStock && stockLeft <= 0;
+            const chipPrice  = typeof entry?.displayPrice === 'number' ? entry.displayPrice : null;
+            const showChipPrice = chipPrice !== null && chipPrice !== displayPrice;
+
             return (
               <button
                 key={s}
                 type="button"
                 disabled={disabled}
                 className={`${mobile ? 'mpd-size-btn' : 'pd-size-btn'} ${selectedSize === s ? 'active' : ''}`}
-                style={disabled ? { opacity: 0.4, cursor: 'not-allowed', textDecoration: 'line-through' } : undefined}
+                style={{
+                  ...(disabled ? { opacity: 0.4, cursor: 'not-allowed', textDecoration: 'line-through' } : {}),
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', lineHeight: 1.2,
+                }}
                 onClick={() => { setSelectedSize(s); setSizeError(''); }}
               >
-                {s}
+                <span>{s}</span>
+                {showChipPrice && !disabled && (
+                  <span style={{ fontSize: '0.65rem', opacity: 0.75, fontWeight: 400 }}>
+                    ₹{chipPrice.toLocaleString('en-IN')}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -262,10 +315,10 @@ const ProductDescription = () => {
             ) : (
               <div className="product-image-placeholder">💎</div>
             )}
-            {hasDiscount && !showResellerPrice && (
+            {activeHasDiscount && (
               <div className="product-discount-badge">{product.discountPercent}% OFF</div>
             )}
-            {showResellerPrice && (
+            {activeIsReseller && (
               <div className="product-discount-badge" style={{ background: '#2e7d32' }}>RESELLER</div>
             )}
             {allImages.length > 1 && (
@@ -369,10 +422,10 @@ const ProductDescription = () => {
           ) : (
             <div className="mpd-placeholder">💎</div>
           )}
-          {hasDiscount && !showResellerPrice && (
+          {activeHasDiscount && (
             <div className="product-discount-badge">{product.discountPercent}% OFF</div>
           )}
-          {showResellerPrice && (
+          {activeIsReseller && (
             <div className="product-discount-badge" style={{ background: '#2e7d32' }}>RESELLER</div>
           )}
           {allImages.length > 1 && (
