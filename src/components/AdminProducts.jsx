@@ -193,6 +193,25 @@ const AdminProducts = () => {
     }));
   };
 
+  // ── Live preview: what will a customer / reseller actually pay for this
+  // size, given what's typed into the form right now? Mirrors the backend's
+  // resolveSizePrice() fallback chain exactly (minus category discounts,
+  // which aren't set from this form) so admins never have to guess which
+  // field "wins" — they see the resolved number update as they type.
+  const resolveSizeDisplay = (entry) => {
+    const basePrice     = Number(form.price) || 0;
+    const baseReseller  = Number(form.resellerPrice) || 0;
+    const sizePrice     = Number(entry.price) || 0;
+    const sizeReseller  = Number(entry.resellerPrice) || 0;
+
+    const customerPays = sizePrice > 0 ? sizePrice : basePrice;
+    const resellerPays = sizeReseller > 0
+      ? sizeReseller
+      : (baseReseller > 0 ? baseReseller : customerPays);
+
+    return { customerPays, resellerPays };
+  };
+
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -502,9 +521,9 @@ const AdminProducts = () => {
                   <label style={labelStyle}>Customer Price (₹) *</label>
                   <input name="price" type="number" value={form.price} onChange={handleChange}
                     placeholder="e.g. 4200" min="0" style={inputStyle} />
-                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color: form.sizeEnabled ? '#b39d00' : '#aaa', fontWeight: form.sizeEnabled ? 600 : 400 }}>
                     {form.sizeEnabled
-                      ? 'Base rate — sizes below use this unless given their own rate'
+                      ? '⚠ Fallback only — any size with its own Rate below ignores this'
                       : ' '}
                   </p>
                 </div>
@@ -520,7 +539,7 @@ const AdminProducts = () => {
                   placeholder="e.g. 3500" min="0" style={{ ...inputStyle, maxWidth:320, background:'#fff' }} />
                 <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#166534' }}>
                   Verified resellers will see this price instead of the customer price when logged in.
-                  {form.sizeEnabled ? ' Sizes below can override this too.' : ''}
+                  {form.sizeEnabled ? ' ⚠ Any size with its own Reseller Rate below ignores this.' : ''}
                 </p>
               </div>
 
@@ -656,10 +675,13 @@ const AdminProducts = () => {
                       <div>
                         <label style={labelStyle}>Sizes, Stock &amp; Rate</label>
                         <p style={{ margin:'0 0 0.75rem', fontSize:'0.75rem', color:'#aaa' }}>
-                          Leave Rate / Reseller Rate at 0 to use the base price above for that size.
+                          Leave Rate / Reseller Rate at 0 to use the base price above. The "Customer pays / Reseller pays" line on each card shows exactly what will be charged.
                         </p>
                         <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:'0.75rem' }}>
-                          {form.sizeStock.map(({ size, stock, price, resellerPrice }) => (
+                          {form.sizeStock.map((entry) => {
+                            const { size, stock, price, resellerPrice } = entry;
+                            const { customerPays, resellerPays } = resolveSizeDisplay(entry);
+                            return (
                             <div key={size} style={{ position:'relative', background:'#fff', border:'1px solid #e0d5c5', borderRadius:8, padding:'0.6rem 0.7rem' }}>
                               <button
                                 type="button"
@@ -700,8 +722,20 @@ const AdminProducts = () => {
                                 onChange={e => handleSizeFieldChange(size, 'resellerPrice', e.target.value)}
                                 style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', background:'#f0fdf4', borderColor:'#bbf7d0' }}
                               />
+
+                              {/* ── Live resolved price — removes all ambiguity: this is
+                                   exactly what the customer/reseller will be charged ── */}
+                              <div style={{ marginTop:8, paddingTop:8, borderTop:'1px dashed #e8e0d5', fontSize:'0.72rem', lineHeight:1.6 }}>
+                                <div style={{ color:'#333' }}>
+                                  Customer pays <strong>₹{customerPays.toLocaleString('en-IN')}</strong>
+                                </div>
+                                <div style={{ color:'#2e7d32' }}>
+                                  Reseller pays <strong>₹{resellerPays.toLocaleString('en-IN')}</strong>
+                                </div>
+                              </div>
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     )}
