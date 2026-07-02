@@ -2,8 +2,13 @@
 .search-page {
   max-width: 1300px;
   margin: 0 auto;
-  padding: 2rem 1.5rem 4rem;
+  padding: 6rem 1.5rem 4rem; /* 6rem = 80px navbar + 2rem breathing room */
   min-height: 70vh;
+}
+
+/* ── Mobile: navbar is 60px ─────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  .search-page { padding-top: 5rem; }
 }
 
 /* ── Header ─────────────────────────────────────────────────────────────────── */
