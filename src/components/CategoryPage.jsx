@@ -1,147 +1,91 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useStore } from '../context/StoreContext';
 import ProductCard from './ProductCard';
 import './CategoryPage.css';
 
-const PRESET_RANGES = [
-  { label: 'All Prices',          min: 0,      max: Infinity },
-  { label: 'Under ₹5,000',        min: 0,      max: 5000     },
-  { label: '₹5,000 – ₹25,000',    min: 5000,   max: 25000    },
-  { label: '₹25,000 – ₹1,00,000', min: 25000,  max: 100000   },
-  { label: 'Above ₹1,00,000',     min: 100000, max: Infinity  },
+// ─── Price presets — tuned for Shree Collection's actual price band ───────────
+// Products currently range from ~₹200 to ~₹600. "Custom Range" lets the user
+// type any bounds they want. Adjust these bands whenever your catalogue grows
+// into a new price tier (e.g. add a ₹2,000+ band when you stock higher pieces).
+const PRICE_RANGES = [
+  { label: 'All Prices',        min: 0,    max: Infinity },
+  { label: 'Under ₹500',        min: 0,    max: 500      },
+  { label: '₹500 – ₹1,000',    min: 500,  max: 1000     },
+  { label: '₹1,000 – ₹2,000',  min: 1000, max: 2000     },
+  { label: 'Above ₹2,000',      min: 2000, max: Infinity },
+  { label: 'Custom Range',      min: null, max: null      },
 ];
 
-// Mirrors the same ₹500 free-shipping threshold used in Checkout.jsx's
-// calcDelivery() — kept here as a display-only constant for the banner copy.
-const FREE_SHIPPING_THRESHOLD = 500;
+const CUSTOM_IDX = PRICE_RANGES.length - 1; // index of the "Custom Range" entry
 
 const CategoryPage = () => {
   const { category }                           = useParams();
   const { products, categories, loadingProds } = useStore();
 
   // ── Filter state ──────────────────────────────────────────────────────────
-  const [priceMode,   setPriceMode]   = useState('preset'); // 'preset' | 'custom'
-  const [presetIdx,   setPresetIdx]   = useState(0);
-  const [customMin,   setCustomMin]   = useState('');
-  const [customMax,   setCustomMax]   = useState('');
-  const [customError, setCustomError] = useState('');
-  const [stockOnly,   setStockOnly]   = useState(false);
-  const [sortBy,      setSortBy]      = useState('default');
+  const [priceRange,   setPriceRange]   = useState(0);
+  const [customMin,    setCustomMin]    = useState('');
+  const [customMax,    setCustomMax]    = useState('');
+  const [appliedMin,   setAppliedMin]   = useState(null);
+  const [appliedMax,   setAppliedMax]   = useState(null);
+  const [customError,  setCustomError]  = useState('');
+  const [stockOnly,    setStockOnly]    = useState(false);
+  const [sortBy,       setSortBy]       = useState('default');
+  const customMinRef = useRef(null);
+
+  // Focus the min-input whenever Custom Range is selected
+  useEffect(() => {
+    if (priceRange === CUSTOM_IDX) {
+      setTimeout(() => customMinRef.current?.focus(), 60);
+    }
+  }, [priceRange]);
 
   const isAll       = !category || category === 'all';
   const categoryObj = categories.find(c => c.slug === category);
   const title       = isAll
     ? 'All Collections'
-    : categoryObj?.name || (category.charAt(0).toUpperCase() + category.slice(1));
+    : (categoryObj?.name || (category.charAt(0).toUpperCase() + category.slice(1)));
   const description = isAll
-    ? 'Explore our complete collection of high-jewellery pieces.'
-    : categoryObj?.description || `Explore our exclusive ${title.toLowerCase()} collection.`;
+    ? 'Explore our complete collection, crafted with uncompromising precision.'
+    : (categoryObj?.description || `Explore our exclusive ${title.toLowerCase()} collection.`);
 
   // ── Resolve active price bounds ───────────────────────────────────────────
   const activeBounds = useMemo(() => {
-    if (priceMode === 'custom') {
-      const min = customMin !== '' ? parseFloat(customMin) : 0;
-      const max = customMax !== '' ? parseFloat(customMax) : Infinity;
-      return { min, max };
+    if (priceRange === CUSTOM_IDX) {
+      return { min: appliedMin ?? 0, max: appliedMax ?? Infinity };
     }
-    return PRESET_RANGES[presetIdx];
-  }, [priceMode, presetIdx, customMin, customMax]);
+    return PRICE_RANGES[priceRange];
+  }, [priceRange, appliedMin, appliedMax]);
 
-  // ── Apply custom range ────────────────────────────────────────────────────
-  const handleCustomApply = () => {
-    const min = parseFloat(customMin);
-    const max = parseFloat(customMax);
-
-    if (customMin !== '' && isNaN(min)) {
-      setCustomError('Enter a valid minimum price');
-      return;
-    }
-    if (customMax !== '' && isNaN(max)) {
-      setCustomError('Enter a valid maximum price');
-      return;
-    }
-    if (customMin !== '' && customMax !== '' && min > max) {
-      setCustomError('Minimum cannot exceed maximum');
-      return;
-    }
+  // ── Handle custom range apply ─────────────────────────────────────────────
+  const handleApplyCustom = () => {
     setCustomError('');
-    setPriceMode('custom');
+    const min = customMin !== '' ? Number(customMin) : 0;
+    const max = customMax !== '' ? Number(customMax) : Infinity;
+    if (customMin !== '' && isNaN(min)) return setCustomError('Min must be a number');
+    if (customMax !== '' && isNaN(max)) return setCustomError('Max must be a number');
+    if (min > max && max !== Infinity)  return setCustomError('Min must be less than Max');
+    setAppliedMin(min);
+    setAppliedMax(max === Infinity ? null : max);
   };
 
-  const handlePresetSelect = (i) => {
-    setPresetIdx(i);
-    setPriceMode('preset');
-    setCustomMin('');
-    setCustomMax('');
-    setCustomError('');
-  };
-
-  const handleClearCustom = () => {
-    setCustomMin('');
-    setCustomMax('');
-    setCustomError('');
-    setPriceMode('preset');
-    setPresetIdx(0);
-  };
-
-  // ── Filtered + sorted products ────────────────────────────────────────────
+  // ── Filtered + sorted product list ───────────────────────────────────────
   const displayed = useMemo(() => {
-    // Safe check — ensure products is always an array
-    const productList = Array.isArray(products) ? products : [];
-    
-let list = isAll
-  ? [...productList]
-  : productList.filter(p => p.category?.slug === category);
-
-    const { min, max } = activeBounds;
+    let list = isAll ? products : products.filter(p => p.categorySlug === category);
     list = list.filter(p => {
-      const effectivePrice =
-        p.discountEnabled && p.discountedPrice ? p.discountedPrice : p.price;
-      return effectivePrice >= min && effectivePrice <= max;
+      const price = Number(p.price) || 0;
+      return price >= activeBounds.min && price <= activeBounds.max;
     });
-
-    if (stockOnly) list = list.filter(p => p.stock > 0);
-
-    switch (sortBy) {
-      case 'price-asc':
-        list = [...list].sort((a, b) => {
-          const pa = a.discountEnabled && a.discountedPrice ? a.discountedPrice : a.price;
-          const pb = b.discountEnabled && b.discountedPrice ? b.discountedPrice : b.price;
-          return pa - pb;
-        });
-        break;
-      case 'price-desc':
-        list = [...list].sort((a, b) => {
-          const pa = a.discountEnabled && a.discountedPrice ? a.discountedPrice : a.price;
-          const pb = b.discountEnabled && b.discountedPrice ? b.discountedPrice : b.price;
-          return pb - pa;
-        });
-        break;
-      case 'name':
-        list = [...list].sort((a, b) => a.title.localeCompare(b.title));
-        break;
-      default:
-        break;
-    }
-
+    if (stockOnly) list = list.filter(p => (p.stock ?? 0) > 0 || p.stockStatus === 'in_stock' || p.stockStatus === 'low_stock');
+    if (sortBy === 'price-asc')  list = [...list].sort((a, b) => Number(a.price) - Number(b.price));
+    if (sortBy === 'price-desc') list = [...list].sort((a, b) => Number(b.price) - Number(a.price));
+    if (sortBy === 'name')       list = [...list].sort((a, b) => a.title.localeCompare(b.title));
     return list;
   }, [products, category, isAll, activeBounds, stockOnly, sortBy]);
 
-  if (loadingProds) {
-    return (
-      <div className="category-page" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-        <p className="body-lg" style={{ color: 'var(--on-surface-variant)' }}>Loading collection…</p>
-      </div>
-    );
-  }
-
-  const isCustomActive = priceMode === 'custom';
-
   return (
     <div className="category-page">
-
-      {/* Header */}
       <header className="category-header">
         <h1 className="display-lg">{title}</h1>
         <p className="body-lg">{description}</p>
@@ -150,158 +94,104 @@ let list = isAll
         </p>
       </header>
 
-      {/* ── Free shipping banner ──────────────────────────────────────────── */}
-      <div className="free-shipping-banner">
-        <span className="free-shipping-banner-icon">🚚</span>
-        <span className="label-md">
-          Free shipping on orders above ₹{FREE_SHIPPING_THRESHOLD.toLocaleString('en-IN')}
-        </span>
-      </div>
-
       <div className="category-layout">
-
-        {/* ── Sidebar ─────────────────────────────────────────────────────── */}
+        {/* ── Sidebar ───────────────────────────────────────────────────── */}
         <aside className="category-sidebar">
 
-          {/* ── Price Range ─────────────────────────────────────────────── */}
+          {/* Price Range */}
           <div className="filter-group">
             <h3 className="label-md filter-group-title">Price Range</h3>
-
-            {/* Preset radio options */}
-            {PRESET_RANGES.map((r, i) => (
+            {PRICE_RANGES.map((r, i) => (
               <label key={i} className="filter-option">
                 <input
                   type="radio"
                   name="price"
-                  checked={priceMode === 'preset' && presetIdx === i}
-                  onChange={() => handlePresetSelect(i)}
+                  checked={priceRange === i}
+                  onChange={() => {
+                    setPriceRange(i);
+                    setCustomError('');
+                    if (i !== CUSTOM_IDX) { setAppliedMin(null); setAppliedMax(null); }
+                  }}
                 />
                 <span>{r.label}</span>
               </label>
             ))}
 
-            {/* Custom range toggle */}
-            <label className="filter-option" style={{ marginTop: 6 }}>
-              <input
-                type="radio"
-                name="price"
-                checked={isCustomActive}
-                onChange={() => setPriceMode('custom')}
-              />
-              <span style={{ fontWeight: isCustomActive ? 600 : 400 }}>Custom Range</span>
-            </label>
-
-            {/* Custom range inputs — always visible, apply on button click */}
-            <div className="custom-price-box">
-              <div className="custom-price-inputs">
-                <div className="custom-price-field">
-                  <span className="custom-price-currency">₹</span>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Min"
-                    value={customMin}
-                    onChange={e => {
-                      setCustomMin(e.target.value);
-                      if (priceMode !== 'custom') setPriceMode('custom');
-                    }}
-                    className="custom-price-input"
-                  />
+            {/* Custom min/max inputs — visible only when "Custom Range" selected */}
+            {priceRange === CUSTOM_IDX && (
+              <div className="custom-range-box">
+                <div className="custom-range-inputs">
+                  <div className="custom-range-field">
+                    <span className="custom-range-symbol">₹</span>
+                    <input
+                      ref={customMinRef}
+                      type="number"
+                      min="0"
+                      placeholder="Min"
+                      value={customMin}
+                      onChange={e => { setCustomMin(e.target.value); setCustomError(''); }}
+                      onKeyDown={e => e.key === 'Enter' && handleApplyCustom()}
+                      className="custom-range-input"
+                    />
+                  </div>
+                  <span className="custom-range-dash">—</span>
+                  <div className="custom-range-field">
+                    <span className="custom-range-symbol">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Max"
+                      value={customMax}
+                      onChange={e => { setCustomMax(e.target.value); setCustomError(''); }}
+                      onKeyDown={e => e.key === 'Enter' && handleApplyCustom()}
+                      className="custom-range-input"
+                    />
+                  </div>
                 </div>
-                <span className="custom-price-dash">—</span>
-                <div className="custom-price-field">
-                  <span className="custom-price-currency">₹</span>
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Max"
-                    value={customMax}
-                    onChange={e => {
-                      setCustomMax(e.target.value);
-                      if (priceMode !== 'custom') setPriceMode('custom');
-                    }}
-                    className="custom-price-input"
-                  />
-                </div>
-              </div>
-
-              {customError && (
-                <p className="custom-price-error">{customError}</p>
-              )}
-
-              <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                <button
-                  className="custom-price-apply"
-                  onClick={handleCustomApply}
-                >
+                {customError && (
+                  <p style={{ color: '#c0392b', fontSize: '0.75rem', margin: '4px 0 0' }}>{customError}</p>
+                )}
+                <button className="custom-range-apply" onClick={handleApplyCustom}>
                   Apply
                 </button>
-                {isCustomActive && (
-                  <button
-                    className="custom-price-clear"
-                    onClick={handleClearCustom}
-                  >
-                    Clear
-                  </button>
-                )}
               </div>
-
-              {/* Active custom range display */}
-              {isCustomActive && (customMin !== '' || customMax !== '') && (
-                <p className="custom-price-active-label">
-                  {customMin !== '' ? `₹${Number(customMin).toLocaleString('en-IN')}` : '₹0'}
-                  {' — '}
-                  {customMax !== '' ? `₹${Number(customMax).toLocaleString('en-IN')}` : 'Any'}
-                </p>
-              )}
-            </div>
+            )}
           </div>
 
-          {/* ── Availability ─────────────────────────────────────────────── */}
+          {/* Availability */}
           <div className="filter-group">
             <h3 className="label-md filter-group-title">Availability</h3>
             <label className="filter-option">
-              <input
-                type="checkbox"
-                checked={stockOnly}
-                onChange={e => setStockOnly(e.target.checked)}
-              />
+              <input type="checkbox" checked={stockOnly} onChange={e => setStockOnly(e.target.checked)} />
               <span>In Stock Only</span>
             </label>
           </div>
 
-          {/* ── Collections ──────────────────────────────────────────────── */}
+          {/* Collections quick-links */}
           <div className="filter-group">
             <h3 className="label-md filter-group-title">Collections</h3>
             <Link
               to="/collections/all"
-              className={`filter-link label-md ${isAll ? 'filter-link-active' : ''}`}
+              className={`filter-option filter-link label-md ${isAll ? 'filter-link-active' : ''}`}
             >
               All Pieces
             </Link>
             {categories.map(c => (
-  <Link
-    key={c.id}
-    to={`/collections/${c.slug}`}
-    className={`filter-link label-md ${c.slug === category ? 'filter-link-active' : ''}`}
-  >
-    {c.name}
-  </Link>
-))}
+              <Link
+                key={c.id}
+                to={`/collections/${c.slug}`}
+                className={`filter-option filter-link label-md ${c.slug === category ? 'filter-link-active' : ''}`}
+              >
+                {c.name}
+              </Link>
+            ))}
           </div>
-
         </aside>
 
-        {/* ── Main grid ───────────────────────────────────────────────────── */}
+        {/* ── Main grid ─────────────────────────────────────────────────── */}
         <div className="category-main">
-
-          {/* Sort bar */}
           <div className="sort-bar">
-            <select
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-              className="sort-select label-md"
-            >
+            <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="sort-select label-md">
               <option value="default">Sort: Featured</option>
               <option value="price-asc">Price: Low to High</option>
               <option value="price-desc">Price: High to Low</option>
@@ -309,47 +199,19 @@ let list = isAll
             </select>
           </div>
 
-          {/* Active filter summary */}
-          {(priceMode !== 'preset' || presetIdx !== 0 || stockOnly) && (
-            <div className="active-filters">
-              <span className="label-md" style={{ color: 'var(--on-surface-variant)' }}>
-                Active filters:
-              </span>
-              {priceMode === 'preset' && presetIdx !== 0 && (
-                <span className="filter-tag">
-                  {PRESET_RANGES[presetIdx].label}
-                  <button onClick={() => handlePresetSelect(0)}>✕</button>
-                </span>
-              )}
-              {isCustomActive && (
-                <span className="filter-tag">
-                  Custom range
-                  <button onClick={handleClearCustom}>✕</button>
-                </span>
-              )}
-              {stockOnly && (
-                <span className="filter-tag">
-                  In Stock Only
-                  <button onClick={() => setStockOnly(false)}>✕</button>
-                </span>
-              )}
-              <button
-                className="clear-all-btn label-md"
-                onClick={() => { handlePresetSelect(0); setStockOnly(false); }}
-              >
-                Clear All
-              </button>
+          {loadingProds ? (
+            <div className="category-grid">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="product-card-skeleton" />
+              ))}
             </div>
-          )}
-
-          {/* Products */}
-          {displayed.length === 0 ? (
+          ) : displayed.length === 0 ? (
             <div className="category-empty">
-              <p className="body-lg">No pieces match your filters.</p>
+              <p className="body-lg">No pieces match your current filters.</p>
               <button
                 className="btn btn-secondary"
                 style={{ marginTop: 16 }}
-                onClick={() => { handlePresetSelect(0); setStockOnly(false); }}
+                onClick={() => { setPriceRange(0); setStockOnly(false); setCustomMin(''); setCustomMax(''); setAppliedMin(null); setAppliedMax(null); }}
               >
                 Clear Filters
               </button>
@@ -357,11 +219,28 @@ let list = isAll
           ) : (
             <section className="category-grid">
               {displayed.map((product, i) => (
-                <ProductCard key={product.id} {...product} delay={i * 0.04} />
+                <ProductCard
+                  key={product.id}
+                  id={product.id}
+                  _id={product.id}
+                  title={product.title}
+                  material={product.material}
+                  price={product.price}
+                  resellerPrice={product.resellerPrice}
+                  displayPrice={product.displayPrice}
+                  isResellerPrice={product.isResellerPrice}
+                  discountEnabled={product.discountEnabled}
+                  discountedPrice={product.discountedPrice}
+                  discountPercent={product.discountPercent}
+                  imageUrl={product.imageUrl}
+                  image={product.image}
+                  stock={product.stock}
+                  sizeEnabled={product.sizeEnabled}
+                  delay={i * 0.04}
+                />
               ))}
             </section>
           )}
-
         </div>
       </div>
     </div>
