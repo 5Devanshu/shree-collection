@@ -9,7 +9,7 @@ import ProductReviews from './ProductReviews';
 const ProductDescription = () => {
   const { id }    = useParams();
   const navigate  = useNavigate();
-  const { addToCart, categories, isReseller } = useStore();
+  const { addToCart, categories, isReseller, customer } = useStore();
 
   const [product,      setProduct]      = useState(null);
   const [loading,      setLoading]      = useState(true);
@@ -176,7 +176,21 @@ const ProductDescription = () => {
     return true;
   };
 
+  // ── Auth guard — guests must log in before adding to cart ───────────────
+  // Resellers and customers are both allowed. Admins are excluded (they
+  // shouldn't be shopping). The redirect param brings them back after login.
+  const isLoggedIn = !!customer || isReseller;
+
+  const requireAuth = () => {
+    if (!isLoggedIn) {
+      navigate(`/login?redirect=${encodeURIComponent(window.location.pathname)}`);
+      return false;
+    }
+    return true;
+  };
+
   const handleAddToCart = () => {
+    if (!requireAuth()) return;
     if (!validateSizeSelected()) return;
     addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined);
     setAddedToCart(true);
@@ -184,6 +198,7 @@ const ProductDescription = () => {
   };
 
   const handleBuyNow = () => {
+    if (!requireAuth()) return;
     if (!validateSizeSelected()) return;
     addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined);
     navigate('/checkout');
