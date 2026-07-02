@@ -150,7 +150,8 @@ const SearchBar = ({ isOpen, onClose }) => {
                 onMouseEnter={() => setActiveIdx(i)}
               >
                 {s.image ? (
-                  <img src={`/api/media/file/${encodeURIComponent(s.image.replace(/^.*\/api\/media\/file\//, ''))}`}
+                  <img
+                    src={s.image}
                     alt={s.title}
                     className="search-suggestion-img"
                     onError={e => { e.target.style.display = 'none'; }}

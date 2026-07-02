@@ -1,6 +1,8 @@
 /* ══════════════════════════════════════════════════════════════════════════════
-   NAVBAR
+   NAVBAR — Shree Collection
+   Breakpoint: ≤768px = mobile drawer; ≥769px = full horizontal nav
 ══════════════════════════════════════════════════════════════════════════════ */
+
 .navbar {
   position: fixed;
   top: 0;
@@ -14,29 +16,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 var(--spacing-8, 2rem);
+  padding: 0 2rem;
   height: 80px;
-}
-
-/* ── Visibility helpers ──────────────────────────────────────────────────── */
-.desktop-only { display: flex; }
-.mobile-only  { display: none; }
-
-/* ── Left nav links ──────────────────────────────────────────────────────── */
-.nav-links {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-8, 2rem);
-  flex: 1;
-}
-
-/* ── Right nav actions ───────────────────────────────────────────────────── */
-.nav-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-6, 1.5rem);
-  flex: 1;
-  justify-content: flex-end;
 }
 
 /* ── Center logo ─────────────────────────────────────────────────────────── */
@@ -58,7 +39,7 @@
   text-decoration: none;
   color: var(--on-surface);
   position: relative;
-  transition: color 0.2s ease;
+  transition: color 0.2s;
   white-space: nowrap;
   display: flex;
   align-items: center;
@@ -83,35 +64,25 @@
   height: 1px;
   background: var(--primary);
   transform: scaleX(0);
-  transition: transform 0.25s ease;
+  transition: transform 0.25s;
   transform-origin: right;
 }
-
-.nav-link:hover::after {
-  transform: scaleX(1);
-  transform-origin: left;
-}
+.nav-link:hover::after { transform: scaleX(1); transform-origin: left; }
 
 /* ── Search button ───────────────────────────────────────────────────────── */
-.nav-search-btn {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
+.nav-search-btn { display: flex; align-items: center; gap: 5px; }
 
 /* ── Account pill ────────────────────────────────────────────────────────── */
 .nav-account-pill { display: flex; align-items: center; gap: 6px; }
 
 .nav-account-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
+  width: 7px; height: 7px; border-radius: 50%;
   background: #4caf50;
   box-shadow: 0 0 0 2px rgba(76,175,80,.2);
   flex-shrink: 0;
 }
 .nav-account-dot--admin    { background: var(--primary); box-shadow: 0 0 0 2px rgba(115,92,0,.2); }
-.nav-account-dot--reseller { background: #f59e0b;        box-shadow: 0 0 0 2px rgba(245,158,11,.2); }
+.nav-account-dot--reseller { background: #f59e0b; box-shadow: 0 0 0 2px rgba(245,158,11,.2); }
 
 /* ── Cart badge ──────────────────────────────────────────────────────────── */
 .cart-badge {
@@ -130,8 +101,30 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   DROPDOWN (desktop)
+   DESKTOP NAV (≥769px) — left links + right actions visible, mobile hidden
 ══════════════════════════════════════════════════════════════════════════════ */
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  flex: 1;
+}
+
+.nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+/* Hamburger and mobile icon tray: HIDDEN on desktop */
+.nav-hamburger,
+.nav-mobile-icons {
+  display: none;
+}
+
+/* ── Desktop dropdown ────────────────────────────────────────────────────── */
 .nav-dropdown { position: relative; display: inline-block; }
 
 .dropdown-content {
@@ -147,12 +140,7 @@
   padding: 0.25rem 0;
   flex-direction: column;
 }
-
-.dropdown-content.active,
-.nav-dropdown:hover .dropdown-content {
-  display: flex;
-}
-
+.dropdown-content.active { display: flex; }
 .dropdown-content--right { left: auto; right: 0; }
 
 .dropdown-item {
@@ -176,40 +164,58 @@
 .dropdown-item:hover { background: var(--surface-container-low, #faf7f2); color: var(--primary); }
 .dropdown-item--danger { color: #c0392b; }
 .dropdown-item--danger:hover { background: rgba(192,57,43,.05); color: #c0392b; }
-
 .dropdown-divider { height: 1px; background: var(--outline-variant, #e8e0d5); margin: 0.2rem 0; }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   MOBILE HAMBURGER + ICONS
+   MOBILE (≤768px) — drawer pattern
 ══════════════════════════════════════════════════════════════════════════════ */
-.nav-hamburger {
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 5px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 6px;
-  transition: background 0.15s;
-}
-.nav-hamburger:hover { background: rgba(115,92,0,.08); }
-.nav-hamburger span {
-  display: block;
-  width: 22px;
-  height: 2px;
-  background: var(--on-surface);
-  border-radius: 2px;
-  transition: transform 0.2s;
+@media (max-width: 768px) {
+
+  /* Hide desktop nav elements */
+  .nav-links,
+  .nav-actions {
+    display: none;
+  }
+
+  /* Show hamburger and mobile icons */
+  .nav-hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 5px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 6px;
+    border-radius: 6px;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  .nav-hamburger:hover { background: rgba(115,92,0,.08); }
+  .nav-hamburger span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: var(--on-surface);
+    border-radius: 2px;
+  }
+
+  .nav-mobile-icons {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .navbar-container {
+    padding: 0 1rem;
+    height: 60px;
+  }
+
+  .navbar-logo-img { height: 80px; }
 }
 
-.nav-mobile-icons {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
+/* ── Mobile icon button ──────────────────────────────────────────────────── */
 .nav-icon-btn {
   display: flex;
   align-items: center;
@@ -241,9 +247,7 @@
 
 .drawer {
   position: absolute;
-  top: 0;
-  left: 0;
-  bottom: 0;
+  top: 0; left: 0; bottom: 0;
   width: min(300px, 85vw);
   background: #fff;
   display: flex;
@@ -269,11 +273,8 @@
   background: #f5f5f5;
   border: none;
   border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 36px; height: 36px;
+  display: flex; align-items: center; justify-content: center;
   cursor: pointer;
   color: #666;
   flex-shrink: 0;
@@ -287,7 +288,6 @@
   padding: 0.5rem 0 2rem;
 }
 
-/* ── Drawer flat link ────────────────────────────────────────────────────── */
 .drawer-item {
   display: flex;
   align-items: center;
@@ -302,16 +302,13 @@
   border-bottom: 1px solid #faf7f2;
   transition: background 0.12s, color 0.12s;
   background: none;
-  border-left: none;
-  border-right: none;
-  border-top: none;
+  border-left: none; border-right: none; border-top: none;
   cursor: pointer;
   width: 100%;
   text-align: left;
 }
 .drawer-item:hover { background: #faf7f2; color: var(--primary, #735c00); }
 
-/* ── Drawer accordion section ────────────────────────────────────────────── */
 .drawer-section { border-bottom: 1px solid #faf7f2; }
 
 .drawer-section-header {
@@ -334,11 +331,7 @@
 }
 .drawer-section-header:hover { background: #faf7f2; color: var(--primary, #735c00); }
 
-.drawer-chevron {
-  transition: transform 0.2s ease;
-  flex-shrink: 0;
-  color: #aaa;
-}
+.drawer-chevron { transition: transform 0.2s; flex-shrink: 0; color: #aaa; }
 .drawer-chevron.open { transform: rotate(180deg); }
 
 .drawer-sub { background: #faf7f2; }
@@ -353,9 +346,7 @@
   transition: color 0.12s, background 0.12s;
   border-bottom: 1px solid #f0ebe3;
   background: none;
-  border-left: none;
-  border-right: none;
-  border-top: none;
+  border-left: none; border-right: none; border-top: none;
   width: 100%;
   text-align: left;
   cursor: pointer;
@@ -364,25 +355,3 @@
 .drawer-sub-item:hover { color: var(--primary, #735c00); background: #f0ebe3; }
 .drawer-sub-item--danger { color: #c0392b; }
 .drawer-sub-item--danger:hover { color: #c0392b; background: rgba(192,57,43,.05); }
-
-/* ══════════════════════════════════════════════════════════════════════════════
-   BREAKPOINTS
-══════════════════════════════════════════════════════════════════════════════ */
-@media (max-width: 768px) {
-  .desktop-only { display: none !important; }
-  .mobile-only  { display: flex !important; }
-
-  .navbar-container {
-    padding: 0 1rem;
-    height: 60px;
-  }
-
-  .nav-logo { flex: 1; }
-
-  .navbar-logo-img { height: 80px; }
-}
-
-@media (min-width: 769px) {
-  .drawer-overlay,
-  .drawer { display: none !important; }
-}

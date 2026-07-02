@@ -117,7 +117,11 @@ const Navbar = () => {
           </div>
 
           {/* ── MOBILE — Hamburger ───────────────────────────────────────── */}
-          <button className="nav-hamburger mobile-only" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
+          <button
+            className="nav-hamburger mobile-only"
+            onClick={() => setDrawerOpen(true)}
+            aria-label="Open menu"
+          >
             <span /><span /><span />
           </button>
 
