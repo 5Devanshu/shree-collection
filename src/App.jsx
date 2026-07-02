@@ -4,7 +4,7 @@ import { StoreProvider } from './context/StoreContext';
 
 import Navbar             from './components/Navbar';
 import Hero               from './components/Hero';
-import CategoryShowcase   from './components/CategoryShowcase'; // ← REPLACES FeaturedGrid on Home Page
+import CategoryShowcase   from './components/CategoryShowcase';
 import AdminPanel         from './components/AdminPanel';
 import AdminLogin         from './components/AdminLogin';
 import CategoryPage       from './components/CategoryPage';
@@ -13,9 +13,10 @@ import Checkout           from './components/Checkout';
 import Login              from './components/Login';
 import Footer             from './components/Footer';
 import TermsAndConditions from './components/TermsAndConditions';
-import CustomerProfile from './components/CustomerProfile';
-import CheckoutCallback from './components/CheckoutCallback';
-import ResellerProfile from './components/ResellerProfile';
+import CustomerProfile    from './components/CustomerProfile';
+import CheckoutCallback   from './components/CheckoutCallback';
+import ResellerProfile    from './components/ResellerProfile';
+import SearchPage         from './components/SearchPage';   // ← NEW
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -45,33 +46,27 @@ function AppRoutes() {
       <Navbar />
       <Routes>
         {/* ── Public storefront ──────────────────────────────────────── */}
-        <Route path="/" element={<><Hero /><CategoryShowcase /></>} />
+        <Route path="/"                      element={<><Hero /><CategoryShowcase /></>} />
         <Route path="/collections/:category" element={<CategoryPage />} />
         <Route path="/product/:id"           element={<ProductDescription />} />
         <Route path="/checkout"              element={<Checkout />} />
-        <Route path="/checkout/callback" element={<CheckoutCallback />} />
+        <Route path="/checkout/callback"     element={<CheckoutCallback />} />
         <Route path="/terms"                 element={<TermsAndConditions />} />
+        <Route path="/search"                element={<SearchPage />} />  {/* ← NEW */}
 
-        {/* ── Reseller auth ──────────────────────────────────────────── */}
+        {/* ── Auth ───────────────────────────────────────────────────── */}
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
 
-        {/* ── Admin auth ─────────────────────────────────────────────── */}
-        <Route
-          path="/admin/login"
-          element={
-            <AdminGuestRoute>
-              <AdminLogin />
-            </AdminGuestRoute>
-          }
-        />
+        {/* ── Admin ──────────────────────────────────────────────────── */}
+        <Route path="/admin/login" element={<AdminGuestRoute><AdminLogin /></AdminGuestRoute>} />
+        <Route path="/admin/*"     element={<AdminPanel />} />
 
-        {/* ── Admin panel — internal guard inside AdminPanel via useEffect */}
-        <Route path="/admin/*" element={<AdminPanel />} />
+        {/* ── Profile pages ──────────────────────────────────────────── */}
+        <Route path="/profile"           element={<CustomerProfile />} />
+        <Route path="/reseller/profile"  element={<ResellerProfile />} />
 
         {/* ── Catch-all ──────────────────────────────────────────────── */}
         <Route path="*" element={<Navigate to="/" replace />} />
-        <Route path="/profile" element={<CustomerProfile />} />
-        <Route path="/reseller/profile" element={<ResellerProfile />} />
       </Routes>
       <Footer />
     </div>
