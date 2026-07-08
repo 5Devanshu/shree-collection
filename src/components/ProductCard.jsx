@@ -95,7 +95,9 @@ const ProductCard = ({
           <h3 className="title">{title}</h3>
         </Link>
 
-        {material && <p className="material">{material}</p>}
+        {/* Material name intentionally not shown here — only on the
+            Product Description page. Kept as a prop (still passed into
+            cartItem above) since cart/checkout display it there. */}
 
         {/* Price */}
         {showResellerPrice ? (
