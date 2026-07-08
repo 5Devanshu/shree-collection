@@ -36,6 +36,13 @@ const ProductDescription = () => {
       .finally(() => setLoading(false));
   }, [id]);
 
+  // Whenever the selected size changes, jump the gallery back to the first
+  // slot — that's where we put the size's own photo (see `displayImages`
+  // below), so picking a size should immediately show it.
+  useEffect(() => {
+    setActiveImg(0);
+  }, [selectedSize]);
+
   useEffect(() => {
     if (!product || loading) return;
     const allImages = buildImages(product);
@@ -111,6 +118,9 @@ const ProductDescription = () => {
   // (product.service.js → applyDisplayPrice) so reseller/discount logic never
   // has to be duplicated here. `price` is the size's raw retail override (0 =
   // no override, this size just uses the product's base price).
+  // Backend now also attaches `displayImage`/`displayColor` per entry —
+  // already resolved with the size-override-falls-back-to-product logic
+  // (product.service.js → resolveSizeImage/resolveSizeColor).
   const getSizeEntry = (size) => {
     if (!hasSizeStock || size === null || size === undefined) return null;
     return product.sizeStock.find(s => Number(s.size) === Number(size)) || null;
@@ -151,11 +161,23 @@ const ProductDescription = () => {
         : (product.stock ?? 0) === 0)
     : (product.stock ?? 0) === 0;
 
+  // ── Per-size image — swap the gallery's first slot to the selected size's
+  // photo (if the admin uploaded one). Falls back to the normal product
+  // gallery when the size has no photo of its own, since `displayImage`
+  // (resolved server-side) equals the base imageUrl in that case.
+  const selectedSizeImage = sizingActive && selectedSizeEntry?.displayImage
+    ? selectedSizeEntry.displayImage
+    : null;
+
+  const displayImages = selectedSizeImage
+    ? [selectedSizeImage, ...allImages.filter(img => img !== selectedSizeImage)]
+    : allImages;
+
   const category   = (Array.isArray(categories) ? categories : [])
     .find(c => c.slug === product.categorySlug || c.id === product.categoryId);
 
-  const prev = () => setActiveImg(i => (i - 1 + allImages.length) % allImages.length);
-  const next = () => setActiveImg(i => (i + 1) % allImages.length);
+  const prev = () => setActiveImg(i => (i - 1 + displayImages.length) % displayImages.length);
+  const next = () => setActiveImg(i => (i + 1) % displayImages.length);
 
   const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX; };
   const onTouchMove  = (e) => { touchEndX.current   = e.touches[0].clientX; };
@@ -251,7 +273,8 @@ const ProductDescription = () => {
   // had its own hardcoded RING_SIZES block, and desktop had no size UI at all.
   // Now both render this exact block, driven only by product.sizeEnabled.
   // Each chip also shows its own rate whenever that size's price differs from
-  // the product's base price, so the customer sees size-wise pricing before
+  // the product's base price, plus a colour swatch dot when that size has its
+  // own colour, so the customer sees size-wise pricing and colour before
   // they even pick one.
   const SizeSelector = ({ mobile = false }) => {
     if (!sizingActive) return null;
@@ -268,12 +291,14 @@ const ProductDescription = () => {
             const disabled   = hasSizeStock && stockLeft <= 0;
             const chipPrice  = typeof entry?.displayPrice === 'number' ? entry.displayPrice : null;
             const showChipPrice = chipPrice !== null && chipPrice !== displayPrice;
+            const chipColor  = entry?.color || '';
 
             return (
               <button
                 key={s}
                 type="button"
                 disabled={disabled}
+                title={chipColor ? `${s} — ${chipColor}` : String(s)}
                 className={`${mobile ? 'mpd-size-btn' : 'pd-size-btn'} ${selectedSize === s ? 'active' : ''}`}
                 style={{
                   ...(disabled ? { opacity: 0.4, cursor: 'not-allowed', textDecoration: 'line-through' } : {}),
@@ -287,12 +312,26 @@ const ProductDescription = () => {
                     ₹{chipPrice.toLocaleString('en-IN')}
                   </span>
                 )}
+                {chipColor && (
+                  <span
+                    aria-hidden="true"
+                    style={{
+                      width: 10, height: 10, borderRadius: '50%', marginTop: 4,
+                      border: '1px solid rgba(0,0,0,0.15)', backgroundColor: chipColor,
+                    }}
+                  />
+                )}
               </button>
             );
           })}
         </div>
         {sizeError && (
           <p style={{ color: '#c0392b', fontSize: '0.8rem', marginTop: 8 }}>{sizeError}</p>
+        )}
+        {sizingActive && selectedSizeEntry?.displayColor && (
+          <p style={{ fontSize: '0.8rem', opacity: 0.75, marginTop: 8 }}>
+            Colour: {selectedSizeEntry.displayColor}
+          </p>
         )}
         {hasSizeStock && selectedSize !== null && selectedSizeStock > 0 && selectedSizeStock <= 5 && (
           <p style={{ color: '#92600e', fontSize: '0.8rem', marginTop: 8 }}>
@@ -325,8 +364,8 @@ const ProductDescription = () => {
         <div className="product-image-section">
           <div className="product-main-image-wrap"
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-            {allImages.length > 0 ? (
-              <img key={activeImg} src={allImages[activeImg]} alt={product.title} className="product-full-image" />
+            {displayImages.length > 0 ? (
+              <img key={activeImg} src={displayImages[activeImg]} alt={product.title} className="product-full-image" />
             ) : (
               <div className="product-image-placeholder">💎</div>
             )}
@@ -336,7 +375,7 @@ const ProductDescription = () => {
             {activeIsReseller && (
               <div className="product-discount-badge" style={{ background: '#2e7d32' }}>RESELLER</div>
             )}
-            {allImages.length > 1 && (
+            {displayImages.length > 1 && (
               <>
                 <button className="gallery-arrow gallery-arrow--prev" onClick={prev}>‹</button>
                 <button className="gallery-arrow gallery-arrow--next" onClick={next}>›</button>
@@ -344,17 +383,17 @@ const ProductDescription = () => {
             )}
           </div>
 
-          {allImages.length > 1 && (
+          {displayImages.length > 1 && (
             <div className="gallery-dots">
-              {allImages.map((_, i) => (
+              {displayImages.map((_, i) => (
                 <button key={i} className={`gallery-dot ${i === activeImg ? 'gallery-dot--active' : ''}`} onClick={() => setActiveImg(i)} />
               ))}
             </div>
           )}
 
-          {allImages.length > 1 && (
+          {displayImages.length > 1 && (
             <div className="gallery-thumbs">
-              {allImages.map((img, i) => (
+              {displayImages.map((img, i) => (
                 <button key={i} className={`gallery-thumb ${i === activeImg ? 'gallery-thumb--active' : ''}`} onClick={() => setActiveImg(i)}>
                   <img src={img} alt={`View ${i + 1}`} />
                 </button>
@@ -432,8 +471,8 @@ const ProductDescription = () => {
 
         <div className="mpd-carousel"
           onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
-          {allImages.length > 0 ? (
-            <img key={activeImg} src={allImages[activeImg]} alt={product.title} className="mpd-img" />
+          {displayImages.length > 0 ? (
+            <img key={activeImg} src={displayImages[activeImg]} alt={product.title} className="mpd-img" />
           ) : (
             <div className="mpd-placeholder">💎</div>
           )}
@@ -443,12 +482,12 @@ const ProductDescription = () => {
           {activeIsReseller && (
             <div className="product-discount-badge" style={{ background: '#2e7d32' }}>RESELLER</div>
           )}
-          {allImages.length > 1 && (
+          {displayImages.length > 1 && (
             <>
               <button className="mpd-arrow mpd-arrow-l" onClick={prev}>‹</button>
               <button className="mpd-arrow mpd-arrow-r" onClick={next}>›</button>
               <div className="mpd-dots">
-                {allImages.map((_, i) => (
+                {displayImages.map((_, i) => (
                   <span key={i} className={`mpd-dot ${i === activeImg ? 'mpd-dot-active' : ''}`} onClick={() => setActiveImg(i)} />
                 ))}
               </div>

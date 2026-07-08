@@ -73,9 +73,9 @@ const Checkout = () => {
     if (error) setError('');
   };
 
-  const handleQtyChange = async (productId, newQty) => {
-    if (newQty < 1) { await removeFromCart(productId); return; }
-    await updateCartItem(productId, newQty);
+  const handleQtyChange = async (productId, newQty, size) => {
+    if (newQty < 1) { await removeFromCart(productId, size); return; }
+    await updateCartItem(productId, newQty, size);
   };
 
   const handleSubmit = async (e) => {
@@ -99,6 +99,11 @@ const Checkout = () => {
         price:     Number(item.price) || 0,
         quantity:  item.quantity,
         image:     item.image || '',
+        // Size is required server-side (validateCartService) for any product
+        // with sizeEnabled — must be forwarded exactly as stored on the cart
+        // line, not re-derived here. Colour rides along for the order snapshot.
+        size:      item.size ?? null,
+        color:     item.color || '',
       }));
 
       const res = await initiatePhonePePayment({
@@ -268,7 +273,7 @@ const Checkout = () => {
               const productId = item.productId || item.product?._id || item.product;
               const itemPrice = Number(item.price) || 0;
               return (
-                <div className="summary-item" key={productId || i}>
+                <div className="summary-item" key={`${productId}-${item.size ?? 'nosize'}-${i}`}>
 
                   <div className="summary-item-image-wrap">
                     {item.image ? (
@@ -288,18 +293,29 @@ const Checkout = () => {
                     {item.material && (
                       <p className="summary-item-material">{item.material}</p>
                     )}
+                    {(item.size !== null && item.size !== undefined) && (
+                      <p className="summary-item-material" style={{ marginTop: 2 }}>
+                        Size: {item.size}
+                        {item.color && <> · Colour: {item.color}</>}
+                      </p>
+                    )}
+                    {!(item.size !== null && item.size !== undefined) && item.color && (
+                      <p className="summary-item-material" style={{ marginTop: 2 }}>
+                        Colour: {item.color}
+                      </p>
+                    )}
                     <div className="summary-item-qty-controls">
                       <button type="button" className="qty-btn"
-                        onClick={() => handleQtyChange(productId, item.quantity - 1)}>
+                        onClick={() => handleQtyChange(productId, item.quantity - 1, item.size)}>
                         −
                       </button>
                       <span className="qty-value">{item.quantity}</span>
                       <button type="button" className="qty-btn"
-                        onClick={() => handleQtyChange(productId, item.quantity + 1)}>
+                        onClick={() => handleQtyChange(productId, item.quantity + 1, item.size)}>
                         +
                       </button>
                       <button type="button" className="qty-remove"
-                        onClick={() => removeFromCart(productId)}>
+                        onClick={() => removeFromCart(productId, item.size)}>
                         Remove
                       </button>
                     </div>

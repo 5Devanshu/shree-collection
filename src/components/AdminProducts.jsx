@@ -11,7 +11,8 @@ const EMPTY_FORM = {
   // ── Sizing ──
   sizeEnabled: false,
   sizeLabel: '',
-  sizeStock: [],       // [{ size, stock, price, resellerPrice }] — admin adds these one at a time
+  // [{ size, stock, price, resellerPrice, color, image, imageKey }] — admin adds these one at a time
+  sizeStock: [],
   newSizeValue: '',    // controlled input for the "Add Size" box
 };
 
@@ -50,6 +51,13 @@ const AdminProducts = () => {
   const [imageUploading,   setImageUploading]   = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
 
+  // ── Per-size image state ──────────────────────────────────────────────────
+  // Keyed by size value. Mirrors the main-image split: a local blob URL for
+  // instant preview (never touches the S3 proxy) plus a per-size uploading
+  // flag so one size's upload spinner doesn't affect the others.
+  const [sizeImagePreviews,  setSizeImagePreviews]  = useState({}); // { [size]: blobUrl | savedUrl }
+  const [sizeImageUploading, setSizeImageUploading] = useState({}); // { [size]: bool }
+
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
@@ -73,10 +81,26 @@ const AdminProducts = () => {
   const openAdd = () => {
     setForm(EMPTY_FORM); setEditingId(null);
     setImagePreview('');
+    setSizeImagePreviews({}); setSizeImageUploading({});
     setFormError(''); setShowModal(true);
   };
 
   const openEdit = (p) => {
+    const sizeStock = Array.isArray(p.sizeStock) && p.sizeStock.length > 0
+      ? p.sizeStock.map(s => ({
+          size:          Number(s.size),
+          stock:         Number(s.stock) || 0,
+          // 0 here means "no override — falls back to the base price"
+          price:         Number(s.price) || 0,
+          resellerPrice: Number(s.resellerPrice) || 0,
+          color:         s.color    || '',
+          image:         s.image    || '',
+          imageKey:      s.imageKey || '',
+        }))
+      : Array.isArray(p.sizes)
+        ? p.sizes.map(s => ({ size: Number(s), stock: 0, price: 0, resellerPrice: 0, color: '', image: '', imageKey: '' })) // legacy products with sizes but no stock yet
+        : [];
+
     setForm({
       title:         p.title        || '',
       material:      p.material     || '',
@@ -95,21 +119,16 @@ const AdminProducts = () => {
       // ── Sizing ──
       sizeEnabled:   p.sizeEnabled || false,
       sizeLabel:     p.sizeLabel   || '',
-      sizeStock:     Array.isArray(p.sizeStock) && p.sizeStock.length > 0
-        ? p.sizeStock.map(s => ({
-            size:          Number(s.size),
-            stock:         Number(s.stock) || 0,
-            // 0 here means "no override — falls back to the base price"
-            price:         Number(s.price) || 0,
-            resellerPrice: Number(s.resellerPrice) || 0,
-          }))
-        : Array.isArray(p.sizes)
-          ? p.sizes.map(s => ({ size: Number(s), stock: 0, price: 0, resellerPrice: 0 })) // legacy products with sizes but no stock yet
-          : [],
+      sizeStock,
       newSizeValue: '',
     });
     setEditingId(p.id);
     setImagePreview(p.imageUrl || p.image?.url || p.image || '');
+    // Pre-fill per-size previews from whatever images were already saved
+    const previews = {};
+    sizeStock.forEach(s => { if (s.image) previews[s.size] = s.image; });
+    setSizeImagePreviews(previews);
+    setSizeImageUploading({});
     setFormError(''); setShowModal(true);
   };
 
@@ -117,6 +136,7 @@ const AdminProducts = () => {
     setShowModal(false); setEditingId(null);
     setForm(EMPTY_FORM); setFormError('');
     setImagePreview('');
+    setSizeImagePreviews({}); setSizeImageUploading({});
   };
 
   const handleChange = (e) => {
@@ -149,7 +169,8 @@ const AdminProducts = () => {
   // ── Add a single size chip ──────────────────────────────────────────────
   // Admin types a number (integer or decimal, e.g. 2.4, 2.6, 7, 8.5) and
   // clicks Add (or hits Enter). Duplicate sizes are rejected. New sizes start
-  // with price/resellerPrice at 0, meaning "use the base product price".
+  // with price/resellerPrice at 0 ("use the base product price") and no
+  // colour/image (falls back to the product's base colour/main image).
   //
   // IMPORTANT: validation is done OUTSIDE setForm so that setFormError and
   // setForm don't race each other — calling setFormError inside a setForm
@@ -169,8 +190,10 @@ const AdminProducts = () => {
     }
 
     setFormError('');
-    const next = [...form.sizeStock, { size: value, stock: 0, price: 0, resellerPrice: 0 }]
-      .sort((a, b) => a.size - b.size);
+    const next = [
+      ...form.sizeStock,
+      { size: value, stock: 0, price: 0, resellerPrice: 0, color: '', image: '', imageKey: '' },
+    ].sort((a, b) => a.size - b.size);
     setForm(prev => ({ ...prev, sizeStock: next, newSizeValue: '' }));
   };
 
@@ -186,15 +209,82 @@ const AdminProducts = () => {
       ...prev,
       sizeStock: prev.sizeStock.filter(s => s.size !== size),
     }));
+    setSizeImagePreviews(prev => {
+      const next = { ...prev };
+      delete next[size];
+      return next;
+    });
   };
 
-  // Generic updater for any field on a size chip — stock, price, resellerPrice.
+  // Generic updater for any NUMERIC field on a size chip — stock, price, resellerPrice.
   const handleSizeFieldChange = (size, field, value) => {
     const val = Number(value) || 0;
     setForm(prev => ({
       ...prev,
       sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, [field]: val } : s),
     }));
+  };
+
+  // Colour is free text, not numeric — kept separate from handleSizeFieldChange
+  // so a partial colour name (e.g. "Ros") doesn't get coerced to 0.
+  const handleSizeColorChange = (size, value) => {
+    setForm(prev => ({
+      ...prev,
+      sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, color: value } : s),
+    }));
+  };
+
+  // ── Per-size image upload ─────────────────────────────────────────────────
+  // Same pattern as the main product image: show a local blob URL instantly,
+  // upload in the background, then swap in the backend URL for saving. Scoped
+  // to this one size's key so uploading size 2.6's photo never disturbs 2.8's.
+  const handleSizeImageUpload = async (size, e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const localPreview = URL.createObjectURL(file);
+    setSizeImagePreviews(prev => ({ ...prev, [size]: localPreview }));
+    setSizeImageUploading(prev => ({ ...prev, [size]: true }));
+    setFormError('');
+
+    try {
+      const fd = new FormData();
+      fd.append('image', file); fd.append('folder', 'product');
+      const res = await uploadImage(fd);
+      const url = res.data?.media?.secureUrl || res.data?.media?.url || '';
+      const key = res.data?.media?.s3Key || '';
+
+      setForm(prev => ({
+        ...prev,
+        sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, image: url, imageKey: key } : s),
+      }));
+    } catch {
+      URL.revokeObjectURL(localPreview);
+      setSizeImagePreviews(prev => {
+        const next = { ...prev };
+        delete next[size];
+        return next;
+      });
+      setForm(prev => ({
+        ...prev,
+        sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, image: '', imageKey: '' } : s),
+      }));
+      setFormError(`Image upload failed for size ${size}. Please try again.`);
+    } finally {
+      setSizeImageUploading(prev => ({ ...prev, [size]: false }));
+    }
+  };
+
+  const handleRemoveSizeImage = (size) => {
+    setForm(prev => ({
+      ...prev,
+      sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, image: '', imageKey: '' } : s),
+    }));
+    setSizeImagePreviews(prev => {
+      const next = { ...prev };
+      delete next[size];
+      return next;
+    });
   };
 
   // ── Live preview: what will a customer / reseller actually pay for this
@@ -274,6 +364,9 @@ const AdminProducts = () => {
     if (form.sizeEnabled && form.sizeStock.length === 0) {
       return setFormError('Please add at least one size, or turn off sizing.');
     }
+    if (form.sizeEnabled && Object.values(sizeImageUploading).some(Boolean)) {
+      return setFormError('Please wait for size image uploads to finish.');
+    }
 
     setSaving(true);
     try {
@@ -293,12 +386,16 @@ const AdminProducts = () => {
         stoneType:     form.stoneType.trim(),
         sku:           form.sku.trim(),
         // ── Sizing — backend derives the flat `sizes` array from sizeStock.
-        // Each entry carries { size, stock, price, resellerPrice }; price/
-        // resellerPrice of 0 tells the backend "use the base product rate
-        // for this size" (see product.service.js normalizeSizeStock).
+        // Each entry carries { size, stock, price, resellerPrice, color,
+        // image, imageKey }; price/resellerPrice of 0, and color/image of ''
+        // tell the backend "use the base product's value for this size"
+        // (see product.service.js normalizeSizeStock / resolveSizeImage /
+        // resolveSizeColor).
         sizeEnabled:   form.sizeEnabled,
         sizeLabel:     form.sizeLabel.trim(),
-        sizeStock:     form.sizeEnabled ? form.sizeStock : [],
+        sizeStock:     form.sizeEnabled
+          ? form.sizeStock.map(s => ({ ...s, color: (s.color || '').trim() }))
+          : [],
       };
       if (editingId) { await updateProduct(editingId, payload); }
       else           { await createProduct(payload); }
@@ -427,6 +524,11 @@ const AdminProducts = () => {
                           {Array.isArray(p.sizeStock) && p.sizeStock.some(s => Number(s.price) > 0) && (
                             <div style={{ color:'#b39d00', marginTop:2, fontSize:'0.72rem' }}>
                               Size-wise rates set
+                            </div>
+                          )}
+                          {Array.isArray(p.sizeStock) && p.sizeStock.some(s => s.color || s.image) && (
+                            <div style={{ color:'#735c00', marginTop:2, fontSize:'0.72rem' }}>
+                              Size-wise colour/image set
                             </div>
                           )}
                         </div>
@@ -593,6 +695,9 @@ const AdminProducts = () => {
                 <div>
                   <label style={labelStyle}>Colour <span style={{ fontWeight:400, textTransform:'none' }}>(optional)</span></label>
                   <input name="colour" value={form.colour} onChange={handleChange} placeholder="e.g. Rose Gold" style={inputStyle} />
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color: form.sizeEnabled ? '#b39d00' : '#aaa', fontWeight: form.sizeEnabled ? 600 : 400 }}>
+                    {form.sizeEnabled ? '⚠ Fallback only — any size with its own Colour below ignores this' : ' '}
+                  </p>
                 </div>
                 <div>
                   <label style={labelStyle}>Plating <span style={{ fontWeight:400, textTransform:'none' }}>(optional)</span></label>
@@ -628,7 +733,7 @@ const AdminProducts = () => {
                   style={{ ...inputStyle, resize:'vertical', lineHeight:1.6 }} />
               </div>
 
-              {/* ── Sizes — admin adds each size individually, with its own stock + rate ── */}
+              {/* ── Sizes — admin adds each size individually, with its own stock, rate, colour + image ── */}
               <div style={{ marginBottom:'1.5rem' }}>
                 <label style={labelStyle}>Sizes</label>
 
@@ -690,20 +795,20 @@ const AdminProducts = () => {
                         >+ Add Size</button>
                       </div>
                       <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
-                        Enter any number — whole (7, 8) or decimal (2.4, 2.6, 2.8) — then click Add Size. Each size gets its own stock and rate below.
+                        Enter any number — whole (7, 8) or decimal (2.4, 2.6, 2.8) — then click Add Size. Each size gets its own stock, rate, colour and photo below.
                       </p>
                     </div>
 
-                    {/* Size chips with per-size stock + rate */}
+                    {/* Size chips with per-size stock + rate + colour + image */}
                     {form.sizeStock.length === 0 ? (
                       <p style={{ margin:0, fontSize:'0.8rem', color:'#c0392b' }}>
                         No sizes added yet. Add at least one size above.
                       </p>
                     ) : (
                       <div>
-                        <label style={labelStyle}>Sizes, Stock &amp; Rate</label>
+                        <label style={labelStyle}>Sizes, Stock, Rate, Colour &amp; Image</label>
                         <p style={{ margin:'0 0 0.75rem', fontSize:'0.75rem', color:'#aaa' }}>
-                          Leave Rate / Reseller Rate at 0 to use the base price above. The "Customer pays / Reseller pays" line on each card shows exactly what will be charged.
+                          Leave Rate / Reseller Rate at 0 to use the base price above. Leave Colour blank or the image empty to fall back to the product's base colour / main image.
                         </p>
                         <div style={{ marginBottom:'0.75rem', fontSize:'0.8rem', color:'#735c00', fontWeight:600 }}>
                           Total stock across all sizes: {form.sizeStock.reduce((sum, s) => sum + (Number(s.stock) || 0), 0)}
@@ -712,10 +817,12 @@ const AdminProducts = () => {
                             (this — not the Stock Count field above — decides the In Stock / Low Stock / Out of Stock badge)
                           </span>
                         </div>
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:'0.75rem' }}>
+                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(190px, 1fr))', gap:'0.75rem' }}>
                           {form.sizeStock.map((entry) => {
-                            const { size, stock, price, resellerPrice } = entry;
+                            const { size, stock, price, resellerPrice, color } = entry;
                             const { customerPays, resellerPays } = resolveSizeDisplay(entry);
+                            const preview    = sizeImagePreviews[size];
+                            const uploading  = !!sizeImageUploading[size];
                             return (
                             <div key={size} style={{ position:'relative', background:'#fff', border:'1px solid #e0d5c5', borderRadius:8, padding:'0.6rem 0.7rem' }}>
                               <button
@@ -755,8 +862,49 @@ const AdminProducts = () => {
                                 value={resellerPrice || ''}
                                 placeholder={form.resellerPrice ? `${form.resellerPrice} (base)` : '0'}
                                 onChange={e => handleSizeFieldChange(size, 'resellerPrice', e.target.value)}
-                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', background:'#f0fdf4', borderColor:'#bbf7d0' }}
+                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', background:'#f0fdf4', borderColor:'#bbf7d0', marginBottom:8 }}
                               />
+
+                              {/* ── Per-size Colour ── */}
+                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Colour</label>
+                              <input
+                                type="text"
+                                value={color || ''}
+                                placeholder={form.colour ? `${form.colour} (base)` : 'e.g. Rose Gold'}
+                                onChange={e => handleSizeColorChange(size, e.target.value)}
+                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', marginBottom:8 }}
+                              />
+
+                              {/* ── Per-size Image ── */}
+                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Image</label>
+                              {preview ? (
+                                <div style={{ position:'relative', marginBottom:6 }}>
+                                  <img
+                                    src={preview}
+                                    alt={`Size ${size}`}
+                                    style={{ width:'100%', height:70, objectFit:'cover', borderRadius:6, border:'1px solid #eee' }}
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveSizeImage(size)}
+                                    title="Remove image"
+                                    style={{ position:'absolute', top:4, right:4, background:'rgba(0,0,0,0.6)', color:'#fff', border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', fontSize:'0.65rem' }}
+                                  >✕</button>
+                                </div>
+                              ) : (
+                                <div style={{ border:'1px dashed #e0d5c5', borderRadius:6, padding:'0.5rem', textAlign:'center', background:'#faf7f2', marginBottom:6, fontSize:'0.7rem', color:'#bbb' }}>
+                                  Falls back to main image
+                                </div>
+                              )}
+                              <label style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#faf7f2', border:'1px solid #ddd', borderRadius:5, padding:'0.35rem 0.6rem', cursor:'pointer', fontSize:'0.72rem', fontWeight:500, width:'100%', justifyContent:'center', boxSizing:'border-box' }}>
+                                {uploading ? '⏳ Uploading…' : preview ? '📁 Change' : '📁 Upload'}
+                                <input
+                                  type="file" accept="image/*"
+                                  onChange={e => handleSizeImageUpload(size, e)}
+                                  disabled={uploading}
+                                  style={{ display:'none' }}
+                                />
+                              </label>
 
                               {/* ── Live resolved price — removes all ambiguity: this is
                                    exactly what the customer/reseller will be charged ── */}
