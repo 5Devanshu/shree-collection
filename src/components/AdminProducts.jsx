@@ -11,9 +11,9 @@ const EMPTY_FORM = {
   // ── Sizing ──
   sizeEnabled: false,
   sizeLabel: '',
-  // [{ size, stock, price, resellerPrice, color, image, imageKey }] — admin adds these one at a time
+  // [{ size, stock, price, resellerPrice, colors: [{ color, stock, image, imageKey }] }]
   sizeStock: [],
-  newSizeValue: '',    // controlled input for the "Add Size" box
+  newSizeValue: '',
 };
 
 const labelStyle = {
@@ -38,6 +38,11 @@ const generateSku = (categoryName, existingProducts) => {
   return `${prefix}-${nextNum}`;
 };
 
+// Composite key used to track per-(size, colour) image preview/upload state,
+// since two different sizes could each have a colour named "Rose Gold" and
+// each needs its own independent preview.
+const colorKey = (size, color) => `${size}::${color}`;
+
 const AdminProducts = () => {
   const [products,         setProducts]         = useState([]);
   const [categories,       setCategories]       = useState([]);
@@ -51,12 +56,12 @@ const AdminProducts = () => {
   const [imageUploading,   setImageUploading]   = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
 
-  // ── Per-size image state ──────────────────────────────────────────────────
-  // Keyed by size value. Mirrors the main-image split: a local blob URL for
-  // instant preview (never touches the S3 proxy) plus a per-size uploading
-  // flag so one size's upload spinner doesn't affect the others.
-  const [sizeImagePreviews,  setSizeImagePreviews]  = useState({}); // { [size]: blobUrl | savedUrl }
-  const [sizeImageUploading, setSizeImageUploading] = useState({}); // { [size]: bool }
+  // ── New-colour-name input, one per size ───────────────────────────────────
+  const [newColorValues, setNewColorValues] = useState({}); // { [size]: '' }
+
+  // ── Per-(size, colour) image state — same blob-preview pattern as before ──
+  const [colorImagePreviews,  setColorImagePreviews]  = useState({}); // { [colorKey]: url }
+  const [colorImageUploading, setColorImageUploading] = useState({}); // { [colorKey]: bool }
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -81,7 +86,8 @@ const AdminProducts = () => {
   const openAdd = () => {
     setForm(EMPTY_FORM); setEditingId(null);
     setImagePreview('');
-    setSizeImagePreviews({}); setSizeImageUploading({});
+    setNewColorValues({});
+    setColorImagePreviews({}); setColorImageUploading({});
     setFormError(''); setShowModal(true);
   };
 
@@ -90,15 +96,19 @@ const AdminProducts = () => {
       ? p.sizeStock.map(s => ({
           size:          Number(s.size),
           stock:         Number(s.stock) || 0,
-          // 0 here means "no override — falls back to the base price"
           price:         Number(s.price) || 0,
           resellerPrice: Number(s.resellerPrice) || 0,
-          color:         s.color    || '',
-          image:         s.image    || '',
-          imageKey:      s.imageKey || '',
+          colors: Array.isArray(s.colors)
+            ? s.colors.map(c => ({
+                color:    c.color    || '',
+                stock:    Number(c.stock) || 0,
+                image:    c.image    || '',
+                imageKey: c.imageKey || '',
+              }))
+            : [],
         }))
       : Array.isArray(p.sizes)
-        ? p.sizes.map(s => ({ size: Number(s), stock: 0, price: 0, resellerPrice: 0, color: '', image: '', imageKey: '' })) // legacy products with sizes but no stock yet
+        ? p.sizes.map(s => ({ size: Number(s), stock: 0, price: 0, resellerPrice: 0, colors: [] }))
         : [];
 
     setForm({
@@ -116,7 +126,6 @@ const AdminProducts = () => {
       plating:       p.plating   || '',
       stoneType:     p.stoneType || '',
       sku:           p.sku       || '',
-      // ── Sizing ──
       sizeEnabled:   p.sizeEnabled || false,
       sizeLabel:     p.sizeLabel   || '',
       sizeStock,
@@ -124,11 +133,17 @@ const AdminProducts = () => {
     });
     setEditingId(p.id);
     setImagePreview(p.imageUrl || p.image?.url || p.image || '');
-    // Pre-fill per-size previews from whatever images were already saved
+
+    // Pre-fill per-colour previews from whatever was already saved
     const previews = {};
-    sizeStock.forEach(s => { if (s.image) previews[s.size] = s.image; });
-    setSizeImagePreviews(previews);
-    setSizeImageUploading({});
+    sizeStock.forEach(s => {
+      (s.colors || []).forEach(c => {
+        if (c.image) previews[colorKey(s.size, c.color)] = c.image;
+      });
+    });
+    setColorImagePreviews(previews);
+    setColorImageUploading({});
+    setNewColorValues({});
     setFormError(''); setShowModal(true);
   };
 
@@ -136,7 +151,8 @@ const AdminProducts = () => {
     setShowModal(false); setEditingId(null);
     setForm(EMPTY_FORM); setFormError('');
     setImagePreview('');
-    setSizeImagePreviews({}); setSizeImageUploading({});
+    setNewColorValues({});
+    setColorImagePreviews({}); setColorImageUploading({});
   };
 
   const handleChange = (e) => {
@@ -152,8 +168,6 @@ const AdminProducts = () => {
     setFormError('');
   };
 
-  // Toggling sizing on auto-suggests a label from the selected category,
-  // e.g. "Necklace" → "Necklace Size". Admin can still edit it freely.
   const handleToggleSizeEnabled = () => {
     setForm(prev => {
       const next = !prev.sizeEnabled;
@@ -167,14 +181,6 @@ const AdminProducts = () => {
   };
 
   // ── Add a single size chip ──────────────────────────────────────────────
-  // Admin types a number (integer or decimal, e.g. 2.4, 2.6, 7, 8.5) and
-  // clicks Add (or hits Enter). Duplicate sizes are rejected. New sizes start
-  // with price/resellerPrice at 0 ("use the base product price") and no
-  // colour/image (falls back to the product's base colour/main image).
-  //
-  // IMPORTANT: validation is done OUTSIDE setForm so that setFormError and
-  // setForm don't race each other — calling setFormError inside a setForm
-  // functional updater caused the second size-add to silently stall.
   const handleAddSize = () => {
     const raw = form.newSizeValue.trim();
     if (raw === '') return;
@@ -192,7 +198,7 @@ const AdminProducts = () => {
     setFormError('');
     const next = [
       ...form.sizeStock,
-      { size: value, stock: 0, price: 0, resellerPrice: 0, color: '', image: '', imageKey: '' },
+      { size: value, stock: 0, price: 0, resellerPrice: 0, colors: [] },
     ].sort((a, b) => a.size - b.size);
     setForm(prev => ({ ...prev, sizeStock: next, newSizeValue: '' }));
   };
@@ -209,14 +215,15 @@ const AdminProducts = () => {
       ...prev,
       sizeStock: prev.sizeStock.filter(s => s.size !== size),
     }));
-    setSizeImagePreviews(prev => {
+    setNewColorValues(prev => {
       const next = { ...prev };
       delete next[size];
       return next;
     });
   };
 
-  // Generic updater for any NUMERIC field on a size chip — stock, price, resellerPrice.
+  // Numeric fields directly on a size (price, resellerPrice, or stock for
+  // sizes with NO colour variants yet).
   const handleSizeFieldChange = (size, field, value) => {
     const val = Number(value) || 0;
     setForm(prev => ({
@@ -225,73 +232,126 @@ const AdminProducts = () => {
     }));
   };
 
-  // Colour is free text, not numeric — kept separate from handleSizeFieldChange
-  // so a partial colour name (e.g. "Ros") doesn't get coerced to 0.
-  const handleSizeColorChange = (size, value) => {
+  // ── Colour variants (per size) ───────────────────────────────────────────
+  const handleAddColor = (size) => {
+    const raw = (newColorValues[size] || '').trim();
+    if (!raw) return;
+
     setForm(prev => ({
       ...prev,
-      sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, color: value } : s),
+      sizeStock: prev.sizeStock.map(s => {
+        if (s.size !== size) return s;
+        if ((s.colors || []).some(c => c.color.toLowerCase() === raw.toLowerCase())) {
+          setFormError(`Colour "${raw}" has already been added for size ${size}.`);
+          return s;
+        }
+        setFormError('');
+        return { ...s, colors: [...(s.colors || []), { color: raw, stock: 0, image: '', imageKey: '' }] };
+      }),
+    }));
+    setNewColorValues(prev => ({ ...prev, [size]: '' }));
+  };
+
+  const handleNewColorKeyDown = (size, e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleAddColor(size);
+    }
+  };
+
+  const handleRemoveColor = (size, color) => {
+    setForm(prev => ({
+      ...prev,
+      sizeStock: prev.sizeStock.map(s =>
+        s.size === size
+          ? { ...s, colors: (s.colors || []).filter(c => c.color !== color) }
+          : s
+      ),
+    }));
+    setColorImagePreviews(prev => {
+      const next = { ...prev };
+      delete next[colorKey(size, color)];
+      return next;
+    });
+  };
+
+  const handleColorStockChange = (size, color, value) => {
+    const val = Number(value) || 0;
+    setForm(prev => ({
+      ...prev,
+      sizeStock: prev.sizeStock.map(s =>
+        s.size === size
+          ? { ...s, colors: (s.colors || []).map(c => c.color === color ? { ...c, stock: val } : c) }
+          : s
+      ),
     }));
   };
 
-  // ── Per-size image upload ─────────────────────────────────────────────────
-  // Same pattern as the main product image: show a local blob URL instantly,
-  // upload in the background, then swap in the backend URL for saving. Scoped
-  // to this one size's key so uploading size 2.6's photo never disturbs 2.8's.
-  const handleSizeImageUpload = async (size, e) => {
+  // ── Per-colour image upload — same blob-preview-first pattern as the main
+  // product image, scoped to this one (size, colour) pair.
+  const handleColorImageUpload = async (size, color, e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const key = colorKey(size, color);
 
     const localPreview = URL.createObjectURL(file);
-    setSizeImagePreviews(prev => ({ ...prev, [size]: localPreview }));
-    setSizeImageUploading(prev => ({ ...prev, [size]: true }));
+    setColorImagePreviews(prev => ({ ...prev, [key]: localPreview }));
+    setColorImageUploading(prev => ({ ...prev, [key]: true }));
     setFormError('');
 
     try {
       const fd = new FormData();
       fd.append('image', file); fd.append('folder', 'product');
       const res = await uploadImage(fd);
-      const url = res.data?.media?.secureUrl || res.data?.media?.url || '';
-      const key = res.data?.media?.s3Key || '';
+      const url   = res.data?.media?.secureUrl || res.data?.media?.url || '';
+      const s3Key = res.data?.media?.s3Key || '';
 
       setForm(prev => ({
         ...prev,
-        sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, image: url, imageKey: key } : s),
+        sizeStock: prev.sizeStock.map(s =>
+          s.size === size
+            ? { ...s, colors: (s.colors || []).map(c => c.color === color ? { ...c, image: url, imageKey: s3Key } : c) }
+            : s
+        ),
       }));
     } catch {
       URL.revokeObjectURL(localPreview);
-      setSizeImagePreviews(prev => {
+      setColorImagePreviews(prev => {
         const next = { ...prev };
-        delete next[size];
+        delete next[key];
         return next;
       });
       setForm(prev => ({
         ...prev,
-        sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, image: '', imageKey: '' } : s),
+        sizeStock: prev.sizeStock.map(s =>
+          s.size === size
+            ? { ...s, colors: (s.colors || []).map(c => c.color === color ? { ...c, image: '', imageKey: '' } : c) }
+            : s
+        ),
       }));
-      setFormError(`Image upload failed for size ${size}. Please try again.`);
+      setFormError(`Image upload failed for size ${size}, colour "${color}". Please try again.`);
     } finally {
-      setSizeImageUploading(prev => ({ ...prev, [size]: false }));
+      setColorImageUploading(prev => ({ ...prev, [key]: false }));
     }
   };
 
-  const handleRemoveSizeImage = (size) => {
+  const handleRemoveColorImage = (size, color) => {
     setForm(prev => ({
       ...prev,
-      sizeStock: prev.sizeStock.map(s => s.size === size ? { ...s, image: '', imageKey: '' } : s),
+      sizeStock: prev.sizeStock.map(s =>
+        s.size === size
+          ? { ...s, colors: (s.colors || []).map(c => c.color === color ? { ...c, image: '', imageKey: '' } : c) }
+          : s
+      ),
     }));
-    setSizeImagePreviews(prev => {
+    setColorImagePreviews(prev => {
       const next = { ...prev };
-      delete next[size];
+      delete next[colorKey(size, color)];
       return next;
     });
   };
 
-  // ── Live preview: what will a customer / reseller actually pay for this
-  // size, given what's typed into the form right now? Mirrors the backend's
-  // resolveSizePrice() fallback chain exactly (minus category discounts,
-  // which aren't set from this form) so admins never have to guess which
-  // field "wins" — they see the resolved number update as they type.
+  // ── Live preview: customer/reseller pays for this size's rate ────────────
   const resolveSizeDisplay = (entry) => {
     const basePrice     = Number(form.price) || 0;
     const baseReseller  = Number(form.resellerPrice) || 0;
@@ -306,18 +366,12 @@ const AdminProducts = () => {
     return { customerPays, resellerPays };
   };
 
-  // ── Image state holds BOTH a blob URL (for immediate local preview) and
-  // the backend-stored URL (for saving). We split these so the <img> tag
-  // never tries to load through the S3 presigned redirect proxy — which
-  // fails in the browser due to expired/CORS presigned URL — and instead
-  // always shows a local blob URL the moment the file is picked.
-  const [imagePreview, setImagePreview] = useState(''); // blob URL — preview only
+  const [imagePreview, setImagePreview] = useState('');
 
   const handleImageUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Show a local blob URL immediately — no network needed, no proxy issues
     const localPreview = URL.createObjectURL(file);
     setImagePreview(localPreview);
 
@@ -327,10 +381,8 @@ const AdminProducts = () => {
       fd.append('image', file); fd.append('folder', 'product');
       const res = await uploadImage(fd);
       const url = res.data?.media?.secureUrl || res.data?.media?.url || '';
-      // Store the backend URL for saving; preview stays as blob URL
       setForm(prev => ({ ...prev, image: url }));
     } catch {
-      // Upload failed — clear preview and stored URL both
       URL.revokeObjectURL(localPreview);
       setImagePreview('');
       setForm(prev => ({ ...prev, image: '' }));
@@ -364,8 +416,8 @@ const AdminProducts = () => {
     if (form.sizeEnabled && form.sizeStock.length === 0) {
       return setFormError('Please add at least one size, or turn off sizing.');
     }
-    if (form.sizeEnabled && Object.values(sizeImageUploading).some(Boolean)) {
-      return setFormError('Please wait for size image uploads to finish.');
+    if (Object.values(colorImageUploading).some(Boolean)) {
+      return setFormError('Please wait for colour image uploads to finish.');
     }
 
     setSaving(true);
@@ -385,16 +437,13 @@ const AdminProducts = () => {
         plating:       form.plating.trim(),
         stoneType:     form.stoneType.trim(),
         sku:           form.sku.trim(),
-        // ── Sizing — backend derives the flat `sizes` array from sizeStock.
-        // Each entry carries { size, stock, price, resellerPrice, color,
-        // image, imageKey }; price/resellerPrice of 0, and color/image of ''
-        // tell the backend "use the base product's value for this size"
-        // (see product.service.js normalizeSizeStock / resolveSizeImage /
-        // resolveSizeColor).
         sizeEnabled:   form.sizeEnabled,
         sizeLabel:     form.sizeLabel.trim(),
         sizeStock:     form.sizeEnabled
-          ? form.sizeStock.map(s => ({ ...s, color: (s.color || '').trim() }))
+          ? form.sizeStock.map(s => ({
+              ...s,
+              colors: (s.colors || []).map(c => ({ ...c, color: c.color.trim() })),
+            }))
           : [],
       };
       if (editingId) { await updateProduct(editingId, payload); }
@@ -493,8 +542,6 @@ const AdminProducts = () => {
                     <td style={{ padding:'0.75rem 1rem', fontSize:'0.88rem', color:'#666' }}>
                       {p.category?.name || p.categorySlug || '—'}
                     </td>
-
-                    {/* ── Price column — shows both prices ── */}
                     <td style={{ padding:'0.75rem 1rem' }}>
                       <div style={{ fontWeight:600, fontSize:'0.9rem' }}>
                         ₹{(Number(p.price) || 0).toLocaleString('en-IN')}
@@ -505,15 +552,12 @@ const AdminProducts = () => {
                         </div>
                       )}
                     </td>
-
                     <td style={{ padding:'0.75rem 1rem' }}>
                       <div style={{ display:'flex', flexDirection:'column', gap:2 }}>
                         <span className={`status-badge ${badge.cls}`} style={{ fontSize:'0.73rem' }}>{badge.text}</span>
                         <span style={{ fontSize:'0.75rem', color:'#aaa' }}>Qty: {p.stock ?? '—'}</span>
                       </div>
                     </td>
-
-                    {/* ── Sizes column — shows per-size rate overrides at a glance ── */}
                     <td style={{ padding:'0.75rem 1rem', fontSize:'0.8rem', color:'#666' }}>
                       {p.sizeEnabled && Array.isArray(p.sizes) && p.sizes.length > 0 ? (
                         <div>
@@ -526,15 +570,14 @@ const AdminProducts = () => {
                               Size-wise rates set
                             </div>
                           )}
-                          {Array.isArray(p.sizeStock) && p.sizeStock.some(s => s.color || s.image) && (
+                          {Array.isArray(p.sizeStock) && p.sizeStock.some(s => Array.isArray(s.colors) && s.colors.length > 0) && (
                             <div style={{ color:'#735c00', marginTop:2, fontSize:'0.72rem' }}>
-                              Size-wise colour/image set
+                              Colour variants set
                             </div>
                           )}
                         </div>
                       ) : '—'}
                     </td>
-
                     <td style={{ padding:'0.75rem 1rem', textAlign:'center' }}>
                       <button onClick={() => handleToggleFeatured(p.id, p.isFeatured)}
                         style={{ background:'none', border:'none', cursor:'pointer', fontSize:'1.3rem', color: p.isFeatured ? '#b39d00' : '#ccc' }}
@@ -557,9 +600,8 @@ const AdminProducts = () => {
       {/* ── Modal ── */}
       {showModal && (
         <div style={{ position:'fixed', inset:0, background:'rgba(26,16,6,0.55)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:1000, padding:'1rem' }}>
-          <div style={{ background:'#fff', borderRadius:12, width:'100%', maxWidth:700, maxHeight:'92vh', overflowY:'auto', boxShadow:'0 24px 48px rgba(0,0,0,0.18)' }}>
+          <div style={{ background:'#fff', borderRadius:12, width:'100%', maxWidth:760, maxHeight:'92vh', overflowY:'auto', boxShadow:'0 24px 48px rgba(0,0,0,0.18)' }}>
 
-            {/* Modal Header */}
             <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'1.5rem 2rem', borderBottom:'1px solid #f0ebe3', position:'sticky', top:0, background:'#fff', zIndex:10 }}>
               <div>
                 <h3 style={{ margin:0, fontWeight:700, fontSize:'1.2rem' }}>{editingId ? 'Edit Product' : 'Add New Product'}</h3>
@@ -695,8 +737,8 @@ const AdminProducts = () => {
                 <div>
                   <label style={labelStyle}>Colour <span style={{ fontWeight:400, textTransform:'none' }}>(optional)</span></label>
                   <input name="colour" value={form.colour} onChange={handleChange} placeholder="e.g. Rose Gold" style={inputStyle} />
-                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color: form.sizeEnabled ? '#b39d00' : '#aaa', fontWeight: form.sizeEnabled ? 600 : 400 }}>
-                    {form.sizeEnabled ? '⚠ Fallback only — any size with its own Colour below ignores this' : ' '}
+                  <p style={{ margin:'4px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                    Used only for products WITHOUT sizing, or sizes with no colour variants of their own.
                   </p>
                 </div>
                 <div>
@@ -733,7 +775,7 @@ const AdminProducts = () => {
                   style={{ ...inputStyle, resize:'vertical', lineHeight:1.6 }} />
               </div>
 
-              {/* ── Sizes — admin adds each size individually, with its own stock, rate, colour + image ── */}
+              {/* ── Sizes ── */}
               <div style={{ marginBottom:'1.5rem' }}>
                 <label style={labelStyle}>Sizes</label>
 
@@ -755,7 +797,6 @@ const AdminProducts = () => {
                 {form.sizeEnabled && (
                   <div style={{ padding:'1rem', background:'#faf7f2', border:'1px solid #e8e0d5', borderRadius:8 }}>
 
-                    {/* Size label */}
                     <div style={{ marginBottom:'1rem' }}>
                       <label style={labelStyle}>Size Label</label>
                       <input
@@ -770,7 +811,6 @@ const AdminProducts = () => {
                       </p>
                     </div>
 
-                    {/* Add Size control */}
                     <div style={{ marginBottom:'1rem' }}>
                       <label style={labelStyle}>Add Size</label>
                       <div style={{ display:'flex', gap:8 }}>
@@ -795,128 +835,183 @@ const AdminProducts = () => {
                         >+ Add Size</button>
                       </div>
                       <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
-                        Enter any number — whole (7, 8) or decimal (2.4, 2.6, 2.8) — then click Add Size. Each size gets its own stock, rate, colour and photo below.
+                        Enter any number — whole (7, 8) or decimal (2.4, 2.6, 2.8) — then click Add Size.
                       </p>
                     </div>
 
-                    {/* Size chips with per-size stock + rate + colour + image */}
                     {form.sizeStock.length === 0 ? (
                       <p style={{ margin:0, fontSize:'0.8rem', color:'#c0392b' }}>
                         No sizes added yet. Add at least one size above.
                       </p>
                     ) : (
                       <div>
-                        <label style={labelStyle}>Sizes, Stock, Rate, Colour &amp; Image</label>
+                        <label style={labelStyle}>Sizes, Rate &amp; Colour Variants</label>
                         <p style={{ margin:'0 0 0.75rem', fontSize:'0.75rem', color:'#aaa' }}>
-                          Leave Rate / Reseller Rate at 0 to use the base price above. Leave Colour blank or the image empty to fall back to the product's base colour / main image.
+                          Leave Rate / Reseller Rate at 0 to use the base price above. Add one or more colours per
+                          size — each colour gets its own stock count and photo. A size with no colours added yet
+                          uses a single stock number for the whole size.
                         </p>
                         <div style={{ marginBottom:'0.75rem', fontSize:'0.8rem', color:'#735c00', fontWeight:600 }}>
                           Total stock across all sizes: {form.sizeStock.reduce((sum, s) => sum + (Number(s.stock) || 0), 0)}
                           {' '}
                           <span style={{ fontWeight:400, color:'#aaa' }}>
-                            (this — not the Stock Count field above — decides the In Stock / Low Stock / Out of Stock badge)
+                            (sum of every colour's stock, or the size's own stock if it has no colours)
                           </span>
                         </div>
-                        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(190px, 1fr))', gap:'0.75rem' }}>
+
+                        <div style={{ display:'flex', flexDirection:'column', gap:'1rem' }}>
                           {form.sizeStock.map((entry) => {
-                            const { size, stock, price, resellerPrice, color } = entry;
+                            const { size, price, resellerPrice, colors = [] } = entry;
                             const { customerPays, resellerPays } = resolveSizeDisplay(entry);
-                            const preview    = sizeImagePreviews[size];
-                            const uploading  = !!sizeImageUploading[size];
+                            const hasColors = colors.length > 0;
+
                             return (
-                            <div key={size} style={{ position:'relative', background:'#fff', border:'1px solid #e0d5c5', borderRadius:8, padding:'0.6rem 0.7rem' }}>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveSize(size)}
-                                title="Remove size"
-                                style={{
-                                  position:'absolute', top:-8, right:-8, background:'#c0392b', color:'#fff',
-                                  border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', fontSize:'0.7rem',
-                                  display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
-                                }}
-                              >✕</button>
-                              <div style={{ fontWeight:700, fontSize:'0.95rem', marginBottom:6, color:'#735c00' }}>
-                                {size}
+                              <div key={size} style={{ position:'relative', background:'#fff', border:'1px solid #e0d5c5', borderRadius:8, padding:'0.85rem 1rem' }}>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveSize(size)}
+                                  title="Remove size"
+                                  style={{
+                                    position:'absolute', top:-8, right:-8, background:'#c0392b', color:'#fff',
+                                    border:'none', borderRadius:'50%', width:22, height:22, cursor:'pointer', fontSize:'0.75rem',
+                                    display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
+                                  }}
+                                >✕</button>
+
+                                <div style={{ display:'flex', alignItems:'baseline', gap:12, marginBottom:10 }}>
+                                  <div style={{ fontWeight:700, fontSize:'1.05rem', color:'#735c00' }}>{size}</div>
+                                  <div style={{ fontSize:'0.72rem', lineHeight:1.5 }}>
+                                    <span style={{ color:'#333' }}>Customer pays <strong>₹{customerPays.toLocaleString('en-IN')}</strong></span>
+                                    {' · '}
+                                    <span style={{ color:'#2e7d32' }}>Reseller pays <strong>₹{resellerPays.toLocaleString('en-IN')}</strong></span>
+                                  </div>
+                                </div>
+
+                                <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+                                  <div>
+                                    <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Rate (₹)</label>
+                                    <input
+                                      type="number" min="0"
+                                      value={price || ''}
+                                      placeholder={form.price ? `${form.price} (base)` : '0'}
+                                      onChange={e => handleSizeFieldChange(size, 'price', e.target.value)}
+                                      style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem' }}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3, color:'#166534' }}>Reseller Rate (₹)</label>
+                                    <input
+                                      type="number" min="0"
+                                      value={resellerPrice || ''}
+                                      placeholder={form.resellerPrice ? `${form.resellerPrice} (base)` : '0'}
+                                      onChange={e => handleSizeFieldChange(size, 'resellerPrice', e.target.value)}
+                                      style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', background:'#f0fdf4', borderColor:'#bbf7d0' }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {!hasColors && (
+                                  <div style={{ marginBottom:12 }}>
+                                    <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Stock (no colours added — single count for this size)</label>
+                                    <input
+                                      type="number" min="0"
+                                      value={entry.stock}
+                                      onChange={e => handleSizeFieldChange(size, 'stock', e.target.value)}
+                                      style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', maxWidth:160 }}
+                                    />
+                                  </div>
+                                )}
+
+                                {/* ── Colour variants for this size ── */}
+                                <div style={{ borderTop:'1px dashed #e8e0d5', paddingTop:10 }}>
+                                  <label style={{ ...labelStyle, fontSize:'0.68rem', marginBottom:6 }}>Colours for size {size}</label>
+
+                                  <div style={{ display:'flex', gap:8, marginBottom: colors.length ? 10 : 0 }}>
+                                    <input
+                                      type="text"
+                                      value={newColorValues[size] || ''}
+                                      onChange={e => setNewColorValues(prev => ({ ...prev, [size]: e.target.value }))}
+                                      onKeyDown={e => handleNewColorKeyDown(size, e)}
+                                      placeholder="e.g. Rose Gold"
+                                      style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', maxWidth:200 }}
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAddColor(size)}
+                                      style={{
+                                        background:'#735c00', color:'#fff', border:'none', borderRadius:6,
+                                        padding:'0 1rem', fontFamily:'inherit', fontSize:'0.8rem',
+                                        fontWeight:600, cursor:'pointer', whiteSpace:'nowrap',
+                                      }}
+                                    >+ Add Colour</button>
+                                  </div>
+
+                                  {colors.length > 0 && (
+                                    <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(170px, 1fr))', gap:'0.7rem' }}>
+                                      {colors.map((c) => {
+                                        const key       = colorKey(size, c.color);
+                                        const preview   = colorImagePreviews[key];
+                                        const uploading = !!colorImageUploading[key];
+                                        return (
+                                          <div key={c.color} style={{ position:'relative', background:'#faf7f2', border:'1px solid #e8e0d5', borderRadius:6, padding:'0.5rem 0.6rem' }}>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleRemoveColor(size, c.color)}
+                                              title="Remove colour"
+                                              style={{
+                                                position:'absolute', top:-7, right:-7, background:'#c0392b', color:'#fff',
+                                                border:'none', borderRadius:'50%', width:18, height:18, cursor:'pointer', fontSize:'0.65rem',
+                                                display:'flex', alignItems:'center', justifyContent:'center', lineHeight:1,
+                                              }}
+                                            >✕</button>
+
+                                            <div style={{ fontWeight:700, fontSize:'0.8rem', marginBottom:6, color:'#333' }}>
+                                              {c.color}
+                                            </div>
+
+                                            <label style={{ ...labelStyle, fontSize:'0.6rem', marginBottom:3 }}>Stock</label>
+                                            <input
+                                              type="number" min="0"
+                                              value={c.stock}
+                                              onChange={e => handleColorStockChange(size, c.color, e.target.value)}
+                                              style={{ ...inputStyle, padding:'0.35rem 0.5rem', fontSize:'0.8rem', marginBottom:6 }}
+                                            />
+
+                                            {preview ? (
+                                              <div style={{ position:'relative', marginBottom:6 }}>
+                                                <img
+                                                  src={preview}
+                                                  alt={c.color}
+                                                  style={{ width:'100%', height:60, objectFit:'cover', borderRadius:5, border:'1px solid #eee' }}
+                                                />
+                                                <button
+                                                  type="button"
+                                                  onClick={() => handleRemoveColorImage(size, c.color)}
+                                                  title="Remove image"
+                                                  style={{ position:'absolute', top:3, right:3, background:'rgba(0,0,0,0.6)', color:'#fff', border:'none', borderRadius:'50%', width:18, height:18, cursor:'pointer', fontSize:'0.6rem' }}
+                                                >✕</button>
+                                              </div>
+                                            ) : (
+                                              <div style={{ border:'1px dashed #e0d5c5', borderRadius:5, padding:'0.4rem', textAlign:'center', background:'#fff', marginBottom:6, fontSize:'0.65rem', color:'#bbb' }}>
+                                                Falls back to main image
+                                              </div>
+                                            )}
+                                            <label style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#fff', border:'1px solid #ddd', borderRadius:5, padding:'0.3rem 0.5rem', cursor:'pointer', fontSize:'0.68rem', fontWeight:500, width:'100%', justifyContent:'center', boxSizing:'border-box' }}>
+                                              {uploading ? '⏳ Uploading…' : preview ? '📁 Change' : '📁 Upload'}
+                                              <input
+                                                type="file" accept="image/*"
+                                                onChange={e => handleColorImageUpload(size, c.color, e)}
+                                                disabled={uploading}
+                                                style={{ display:'none' }}
+                                              />
+                                            </label>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-
-                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Stock</label>
-                              <input
-                                type="number" min="0"
-                                value={stock}
-                                onChange={e => handleSizeFieldChange(size, 'stock', e.target.value)}
-                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', marginBottom:8 }}
-                              />
-
-                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Rate (₹)</label>
-                              <input
-                                type="number" min="0"
-                                value={price || ''}
-                                placeholder={form.price ? `${form.price} (base)` : '0'}
-                                onChange={e => handleSizeFieldChange(size, 'price', e.target.value)}
-                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', marginBottom:8 }}
-                              />
-
-                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3, color:'#166534' }}>Reseller Rate (₹)</label>
-                              <input
-                                type="number" min="0"
-                                value={resellerPrice || ''}
-                                placeholder={form.resellerPrice ? `${form.resellerPrice} (base)` : '0'}
-                                onChange={e => handleSizeFieldChange(size, 'resellerPrice', e.target.value)}
-                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', background:'#f0fdf4', borderColor:'#bbf7d0', marginBottom:8 }}
-                              />
-
-                              {/* ── Per-size Colour ── */}
-                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Colour</label>
-                              <input
-                                type="text"
-                                value={color || ''}
-                                placeholder={form.colour ? `${form.colour} (base)` : 'e.g. Rose Gold'}
-                                onChange={e => handleSizeColorChange(size, e.target.value)}
-                                style={{ ...inputStyle, padding:'0.45rem 0.55rem', fontSize:'0.85rem', marginBottom:8 }}
-                              />
-
-                              {/* ── Per-size Image ── */}
-                              <label style={{ ...labelStyle, fontSize:'0.65rem', marginBottom:3 }}>Image</label>
-                              {preview ? (
-                                <div style={{ position:'relative', marginBottom:6 }}>
-                                  <img
-                                    src={preview}
-                                    alt={`Size ${size}`}
-                                    style={{ width:'100%', height:70, objectFit:'cover', borderRadius:6, border:'1px solid #eee' }}
-                                  />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveSizeImage(size)}
-                                    title="Remove image"
-                                    style={{ position:'absolute', top:4, right:4, background:'rgba(0,0,0,0.6)', color:'#fff', border:'none', borderRadius:'50%', width:20, height:20, cursor:'pointer', fontSize:'0.65rem' }}
-                                  >✕</button>
-                                </div>
-                              ) : (
-                                <div style={{ border:'1px dashed #e0d5c5', borderRadius:6, padding:'0.5rem', textAlign:'center', background:'#faf7f2', marginBottom:6, fontSize:'0.7rem', color:'#bbb' }}>
-                                  Falls back to main image
-                                </div>
-                              )}
-                              <label style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#faf7f2', border:'1px solid #ddd', borderRadius:5, padding:'0.35rem 0.6rem', cursor:'pointer', fontSize:'0.72rem', fontWeight:500, width:'100%', justifyContent:'center', boxSizing:'border-box' }}>
-                                {uploading ? '⏳ Uploading…' : preview ? '📁 Change' : '📁 Upload'}
-                                <input
-                                  type="file" accept="image/*"
-                                  onChange={e => handleSizeImageUpload(size, e)}
-                                  disabled={uploading}
-                                  style={{ display:'none' }}
-                                />
-                              </label>
-
-                              {/* ── Live resolved price — removes all ambiguity: this is
-                                   exactly what the customer/reseller will be charged ── */}
-                              <div style={{ marginTop:8, paddingTop:8, borderTop:'1px dashed #e8e0d5', fontSize:'0.72rem', lineHeight:1.6 }}>
-                                <div style={{ color:'#333' }}>
-                                  Customer pays <strong>₹{customerPays.toLocaleString('en-IN')}</strong>
-                                </div>
-                                <div style={{ color:'#2e7d32' }}>
-                                  Reseller pays <strong>₹{resellerPays.toLocaleString('en-IN')}</strong>
-                                </div>
-                              </div>
-                            </div>
                             );
                           })}
                         </div>

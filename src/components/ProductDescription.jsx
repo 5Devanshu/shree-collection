@@ -6,18 +6,26 @@ import NotifyMe              from './NotifyMe';
 import './ProductDescription.css';
 import ProductReviews from './ProductReviews';
 
+// Sizes are stored as plain numbers (e.g. 2.4, 2.6, 7, 8.5) with no unit.
+// Shree Collection sizes them all in inches, so every customer-facing
+// rendering of a size number goes through this helper for a consistent
+// `2.4"` display instead of a bare `2.4`.
+const formatSize = (size) => `${size}"`;
+
 const ProductDescription = () => {
   const { id }    = useParams();
   const navigate  = useNavigate();
   const { addToCart, categories, isReseller, customer } = useStore();
 
-  const [product,      setProduct]      = useState(null);
-  const [loading,      setLoading]      = useState(true);
-  const [activeImg,    setActiveImg]    = useState(0);
-  const [selectedSize, setSelectedSize] = useState(null);
-  const [sizeError,    setSizeError]    = useState('');
-  const [wished,       setWished]       = useState(false);
-  const [addedToCart,  setAddedToCart]  = useState(false);
+  const [product,       setProduct]       = useState(null);
+  const [loading,       setLoading]       = useState(true);
+  const [activeImg,     setActiveImg]     = useState(0);
+  const [selectedSize,  setSelectedSize]  = useState(null);
+  const [selectedColor, setSelectedColor] = useState(null);
+  const [sizeError,     setSizeError]     = useState('');
+  const [colorError,    setColorError]    = useState('');
+  const [wished,        setWished]        = useState(false);
+  const [addedToCart,   setAddedToCart]   = useState(false);
 
   const touchStartX = useRef(null);
   const touchEndX   = useRef(null);
@@ -30,18 +38,25 @@ const ProductDescription = () => {
         setProduct(data);
         setActiveImg(0);
         setSelectedSize(null);
+        setSelectedColor(null);
         setSizeError('');
+        setColorError('');
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, [id]);
 
-  // Whenever the selected size changes, jump the gallery back to the first
-  // slot — that's where we put the size's own photo (see `displayImages`
-  // below), so picking a size should immediately show it.
+  // Reset colour choice + gallery position whenever the size changes — a
+  // colour picked for one size has no meaning for another.
   useEffect(() => {
+    setSelectedColor(null);
+    setColorError('');
     setActiveImg(0);
   }, [selectedSize]);
+
+  useEffect(() => {
+    setActiveImg(0);
+  }, [selectedColor]);
 
   useEffect(() => {
     if (!product || loading) return;
@@ -88,7 +103,6 @@ const ProductDescription = () => {
   const numericReseller  = parseFloat(product.resellerPrice) || 0;
   const numericDiscounted = parseFloat(product.discountedPrice) || 0;
 
-  // Reseller price takes priority if logged in as reseller and price is set
   const showResellerPrice = isReseller && numericReseller > 0;
   const hasDiscount       = !showResellerPrice && product.discountEnabled && product.discountPercent > 0;
 
@@ -98,44 +112,35 @@ const ProductDescription = () => {
       ? numericDiscounted
       : numericPrice;
 
-  // ── Sizing — single source of truth: product.sizeEnabled ────────────────
-  // No more guessing from category name ("ring" in slug, etc). Admin sets
-  // this explicitly per product, so desktop and mobile now always agree.
+  // ── Sizing ────────────────────────────────────────────────────────────────
   const sizingActive = !!product.sizeEnabled && Array.isArray(product.sizes) && product.sizes.length > 0;
   const sizeLabel     = product.sizeLabel || 'Size';
   const hasSizeStock  = Array.isArray(product.sizeStock) && product.sizeStock.length > 0;
 
-  // Resolve stock for the currently selected size (falls back to top-level stock
-  // when per-size stock isn't tracked for this product)
-  const stockForSize = (size) => {
-    if (!hasSizeStock) return product.stock ?? 0;
-    const entry = product.sizeStock.find(s => Number(s.size) === Number(size));
-    return entry ? Number(entry.stock) : 0;
-  };
-
-  // ── Size-wise rates ───────────────────────────────────────────────────────
-  // Each sizeStock entry carries its own `displayPrice`, computed server-side
-  // (product.service.js → applyDisplayPrice) so reseller/discount logic never
-  // has to be duplicated here. `price` is the size's raw retail override (0 =
-  // no override, this size just uses the product's base price).
-  // Backend now also attaches `displayImage`/`displayColor` per entry —
-  // already resolved with the size-override-falls-back-to-product logic
-  // (product.service.js → resolveSizeImage/resolveSizeColor).
   const getSizeEntry = (size) => {
     if (!hasSizeStock || size === null || size === undefined) return null;
     return product.sizeStock.find(s => Number(s.size) === Number(size)) || null;
   };
 
-  // The "full" retail rate for a given size — used as the strike-through
-  // original price when that size is discounted or reseller-priced.
+  const selectedSizeEntry = getSizeEntry(selectedSize);
+
+  // ── Colour variants for the selected size ────────────────────────────────
+  const sizeColors        = Array.isArray(selectedSizeEntry?.colors) ? selectedSizeEntry.colors : [];
+  const colorsRequired    = sizingActive && selectedSize !== null && sizeColors.length > 0;
+  const getColorVariant   = (colorName) => sizeColors.find(c => c.color === colorName) || null;
+  const selectedColorEntry = colorsRequired ? getColorVariant(selectedColor) : null;
+
+  // Stock for the currently selected size (+colour, if this size has colours)
+  const stockForSize = (size) => {
+    const entry = getSizeEntry(size);
+    if (!entry) return hasSizeStock ? 0 : (product.stock ?? 0);
+    return Number(entry.stock) || 0;
+  };
+  const stockForColor = (colorEntry) => Number(colorEntry?.stock) || 0;
+
   const sizeRetailPrice = (entry) =>
     entry && Number(entry.price) > 0 ? Number(entry.price) : numericPrice;
 
-  const selectedSizeEntry = getSizeEntry(selectedSize);
-
-  // Before a size is picked, show the base product price as a starting point.
-  // Once a size is picked, its own displayPrice (already reseller/discount
-  // aware from the backend) takes over.
   const activePrice = sizingActive && selectedSizeEntry && typeof selectedSizeEntry.displayPrice === 'number'
     ? selectedSizeEntry.displayPrice
     : displayPrice;
@@ -144,9 +149,6 @@ const ProductDescription = () => {
     ? sizeRetailPrice(selectedSizeEntry)
     : numericPrice;
 
-  // Reseller badge for the active price: either this size has its own
-  // reseller rate, or (when the size has no retail override) the product's
-  // flat reseller rate applies.
   const activeIsReseller = isReseller && sizingActive && selectedSizeEntry
     ? (Number(selectedSizeEntry.resellerPrice) > 0 ||
        (numericReseller > 0 && !(Number(selectedSizeEntry.price) > 0)))
@@ -154,26 +156,25 @@ const ProductDescription = () => {
 
   const activeHasDiscount = !activeIsReseller && product.discountEnabled && product.discountPercent > 0 && activePrice < activeOriginal;
 
-  const selectedSizeStock = selectedSize !== null ? stockForSize(selectedSize) : null;
+  const isSizeOut = (size) => {
+    const entry = getSizeEntry(size);
+    if (!entry) return true;
+    return stockForSize(size) <= 0;
+  };
   const outOfStock = sizingActive
-    ? (hasSizeStock
-        ? product.sizes.every(s => stockForSize(s) <= 0)   // every size is out
-        : (product.stock ?? 0) === 0)
+    ? (hasSizeStock ? product.sizes.every(isSizeOut) : (product.stock ?? 0) === 0)
     : (product.stock ?? 0) === 0;
 
-  // ── Per-size image — swap the gallery's first slot to the selected size's
-  // photo (if the admin uploaded one). Falls back to the normal product
-  // gallery when the size has no photo of its own, since `displayImage`
-  // (resolved server-side) equals the base imageUrl in that case.
-  const selectedSizeImage = sizingActive && selectedSizeEntry?.displayImage
-    ? selectedSizeEntry.displayImage
-    : null;
+  // ── Image resolution ─────────────────────────────────────────────────────
+  const selectedImage = colorsRequired
+    ? (selectedColorEntry?.image || null)
+    : (sizingActive && selectedSizeEntry?.displayImage ? selectedSizeEntry.displayImage : null);
 
-  const displayImages = selectedSizeImage
-    ? [selectedSizeImage, ...allImages.filter(img => img !== selectedSizeImage)]
+  const displayImages = selectedImage
+    ? [selectedImage, ...allImages.filter(img => img !== selectedImage)]
     : allImages;
 
-  const category   = (Array.isArray(categories) ? categories : [])
+  const category = (Array.isArray(categories) ? categories : [])
     .find(c => c.slug === product.categorySlug || c.id === product.categoryId);
 
   const prev = () => setActiveImg(i => (i - 1 + displayImages.length) % displayImages.length);
@@ -189,18 +190,23 @@ const ProductDescription = () => {
     touchEndX.current   = null;
   };
 
-  const validateSizeSelected = () => {
+  const validateSelection = () => {
+    let ok = true;
     if (sizingActive && selectedSize === null) {
       setSizeError(`Please select a ${sizeLabel.toLowerCase()}`);
-      return false;
+      ok = false;
+    } else {
+      setSizeError('');
     }
-    setSizeError('');
-    return true;
+    if (colorsRequired && !selectedColor) {
+      setColorError('Please select a colour');
+      ok = false;
+    } else {
+      setColorError('');
+    }
+    return ok;
   };
 
-  // ── Auth guard — guests must log in before adding to cart ───────────────
-  // Resellers and customers are both allowed. Admins are excluded (they
-  // shouldn't be shopping). The redirect param brings them back after login.
   const isLoggedIn = !!customer || isReseller;
 
   const requireAuth = () => {
@@ -213,16 +219,16 @@ const ProductDescription = () => {
 
   const handleAddToCart = () => {
     if (!requireAuth()) return;
-    if (!validateSizeSelected()) return;
-    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined);
+    if (!validateSelection()) return;
+    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined, colorsRequired ? selectedColor : undefined);
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   };
 
   const handleBuyNow = () => {
     if (!requireAuth()) return;
-    if (!validateSizeSelected()) return;
-    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined);
+    if (!validateSelection()) return;
+    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined, colorsRequired ? selectedColor : undefined);
     navigate('/checkout');
   };
 
@@ -268,37 +274,28 @@ const ProductDescription = () => {
     );
   };
 
-  // ── Size selector — shared desktop + mobile, identical logic both places ──
-  // This single component fixes the original bug: previously the mobile view
-  // had its own hardcoded RING_SIZES block, and desktop had no size UI at all.
-  // Now both render this exact block, driven only by product.sizeEnabled.
-  // Each chip also shows its own rate whenever that size's price differs from
-  // the product's base price, plus a colour swatch dot when that size has its
-  // own colour, so the customer sees size-wise pricing and colour before
-  // they even pick one.
+  // ── Size selector ──────────────────────────────────────────────────────────
   const SizeSelector = ({ mobile = false }) => {
     if (!sizingActive) return null;
 
     return (
       <div className={mobile ? 'mpd-section' : 'pd-size-section'} style={!mobile ? { marginTop: '1.5rem' } : undefined}>
         <div className={mobile ? 'mpd-size-header' : 'pd-size-header'}>
-          <h3 className={mobile ? 'mpd-section-title' : 'label-md'}>{sizeLabel}</h3>
+          <h3 className={mobile ? 'mpd-section-title' : 'label-md'}>{sizeLabel} <span style={{ fontWeight: 400, opacity: 0.6 }}>(inches)</span></h3>
         </div>
         <div className={mobile ? 'mpd-size-grid' : 'pd-size-grid'}>
           {product.sizes.map(s => {
-            const entry      = getSizeEntry(s);
-            const stockLeft  = stockForSize(s);
-            const disabled   = hasSizeStock && stockLeft <= 0;
-            const chipPrice  = typeof entry?.displayPrice === 'number' ? entry.displayPrice : null;
+            const entry     = getSizeEntry(s);
+            const disabled  = hasSizeStock && stockForSize(s) <= 0;
+            const chipPrice = typeof entry?.displayPrice === 'number' ? entry.displayPrice : null;
             const showChipPrice = chipPrice !== null && chipPrice !== displayPrice;
-            const chipColor  = entry?.color || '';
 
             return (
               <button
                 key={s}
                 type="button"
                 disabled={disabled}
-                title={chipColor ? `${s} — ${chipColor}` : String(s)}
+                title={formatSize(s)}
                 className={`${mobile ? 'mpd-size-btn' : 'pd-size-btn'} ${selectedSize === s ? 'active' : ''}`}
                 style={{
                   ...(disabled ? { opacity: 0.4, cursor: 'not-allowed', textDecoration: 'line-through' } : {}),
@@ -306,20 +303,11 @@ const ProductDescription = () => {
                 }}
                 onClick={() => { setSelectedSize(s); setSizeError(''); }}
               >
-                <span>{s}</span>
+                <span>{formatSize(s)}</span>
                 {showChipPrice && !disabled && (
                   <span style={{ fontSize: '0.65rem', opacity: 0.75, fontWeight: 400 }}>
                     ₹{chipPrice.toLocaleString('en-IN')}
                   </span>
-                )}
-                {chipColor && (
-                  <span
-                    aria-hidden="true"
-                    style={{
-                      width: 10, height: 10, borderRadius: '50%', marginTop: 4,
-                      border: '1px solid rgba(0,0,0,0.15)', backgroundColor: chipColor,
-                    }}
-                  />
                 )}
               </button>
             );
@@ -328,14 +316,69 @@ const ProductDescription = () => {
         {sizeError && (
           <p style={{ color: '#c0392b', fontSize: '0.8rem', marginTop: 8 }}>{sizeError}</p>
         )}
-        {sizingActive && selectedSizeEntry?.displayColor && (
+        {!colorsRequired && sizingActive && selectedSizeEntry?.displayColor && (
           <p style={{ fontSize: '0.8rem', opacity: 0.75, marginTop: 8 }}>
             Colour: {selectedSizeEntry.displayColor}
           </p>
         )}
-        {hasSizeStock && selectedSize !== null && selectedSizeStock > 0 && selectedSizeStock <= 5 && (
+        {!colorsRequired && hasSizeStock && selectedSize !== null && stockForSize(selectedSize) > 0 && stockForSize(selectedSize) <= 5 && (
           <p style={{ color: '#92600e', fontSize: '0.8rem', marginTop: 8 }}>
-            Only {selectedSizeStock} left in size {selectedSize}
+            Only {stockForSize(selectedSize)} left in size {formatSize(selectedSize)}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  // ── Colour selector — appears only once a size WITH colour variants is picked ──
+  const ColorSelector = ({ mobile = false }) => {
+    if (!colorsRequired) return null;
+
+    return (
+      <div className={mobile ? 'mpd-section' : 'pd-size-section'} style={!mobile ? { marginTop: '1.25rem' } : undefined}>
+        <div className={mobile ? 'mpd-size-header' : 'pd-size-header'}>
+          <h3 className={mobile ? 'mpd-section-title' : 'label-md'}>
+            Colour <span style={{ fontWeight: 400, opacity: 0.6 }}>for {formatSize(selectedSize)}</span>
+          </h3>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+          {sizeColors.map(c => {
+            const disabled = stockForColor(c) <= 0;
+            return (
+              <button
+                key={c.color}
+                type="button"
+                disabled={disabled}
+                title={c.color}
+                onClick={() => { setSelectedColor(c.color); setColorError(''); }}
+                style={{
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
+                  padding: '6px 10px', borderRadius: 8,
+                  border: selectedColor === c.color ? '2px solid var(--primary, #735c00)' : '1px solid #ddd',
+                  background: '#fff', cursor: disabled ? 'not-allowed' : 'pointer',
+                  opacity: disabled ? 0.4 : 1,
+                }}
+              >
+                {c.image ? (
+                  <img src={c.image} alt={c.color} style={{ width: 36, height: 36, objectFit: 'cover', borderRadius: 6 }} />
+                ) : (
+                  <span
+                    aria-hidden="true"
+                    style={{ width: 20, height: 20, borderRadius: '50%', border: '1px solid rgba(0,0,0,0.15)', backgroundColor: c.color }}
+                  />
+                )}
+                <span style={{ fontSize: '0.72rem' }}>{c.color}</span>
+                {disabled && <span style={{ fontSize: '0.6rem', color: '#c0392b' }}>Out of stock</span>}
+              </button>
+            );
+          })}
+        </div>
+        {colorError && (
+          <p style={{ color: '#c0392b', fontSize: '0.8rem', marginTop: 8 }}>{colorError}</p>
+        )}
+        {selectedColorEntry && stockForColor(selectedColorEntry) > 0 && stockForColor(selectedColorEntry) <= 5 && (
+          <p style={{ color: '#92600e', fontSize: '0.8rem', marginTop: 8 }}>
+            Only {stockForColor(selectedColorEntry)} left in {selectedColorEntry.color}
           </p>
         )}
       </div>
@@ -360,7 +403,6 @@ const ProductDescription = () => {
       {/* ══ DESKTOP ══════════════════════════════════════════════════════════ */}
       <div className="product-split">
 
-        {/* Left — Image Gallery */}
         <div className="product-image-section">
           <div className="product-main-image-wrap"
             onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
@@ -402,7 +444,6 @@ const ProductDescription = () => {
           )}
         </div>
 
-        {/* Right — Product Info */}
         <div className="product-info-section">
           <div className="product-info-inner">
 
@@ -446,8 +487,8 @@ const ProductDescription = () => {
               </div>
             )}
 
-            {/* ── Size selector now also rendered on desktop — this was missing entirely before ── */}
             <SizeSelector />
+            <ColorSelector />
 
             <SpecsBlock />
 
@@ -521,8 +562,8 @@ const ProductDescription = () => {
             </div>
           )}
 
-          {/* ── Same SizeSelector component as desktop — same data, same condition ── */}
           <SizeSelector mobile />
+          <ColorSelector mobile />
 
           {product.details?.length > 0 && (
             <div className="mpd-section">
@@ -549,7 +590,6 @@ const ProductDescription = () => {
           <div style={{ height: 96 }} />
         </div>
 
-        {/* Fixed bottom bar */}
         <div className="mpd-bottom-bar">
           {!outOfStock ? (
             <>

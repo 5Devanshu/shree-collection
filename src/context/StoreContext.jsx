@@ -116,12 +116,21 @@ export const StoreProvider = ({ children }) => {
   }, []);
 
   // ── Cart: add ─────────────────────────────────────────────────────────────
-  const addToCart = useCallback(async (productOrId, quantity = 1) => {
+  // `size` and `color` are optional — required by the backend only when the
+  // product (and, for colour, the chosen size) actually has those options.
+  // ProductCard calls this with just (productOrId, quantity) as before;
+  // ProductDescription calls it with all five args once a size/colour has
+  // been validated client-side.
+  const addToCart = useCallback(async (productOrId, quantity = 1, price, size, color) => {
     try {
       const productId = productOrId && typeof productOrId === 'object'
         ? (productOrId.id || productOrId._id)
         : productOrId;
-      const res = await apiClient.post('/cart/add', { productId, quantity });
+      const body = { productId, quantity };
+      if (size  !== undefined) body.size  = size;
+      if (color !== undefined) body.color = color;
+
+      const res = await apiClient.post('/cart/add', body);
       if (res.data.success) {
         setCart(res.data.cart);
         setCartCount(res.data.count || 0);
@@ -133,9 +142,13 @@ export const StoreProvider = ({ children }) => {
   }, []);
 
   // ── Cart: update quantity ─────────────────────────────────────────────────
-  const updateCartItem = useCallback(async (productId, quantity) => {
+  const updateCartItem = useCallback(async (productId, quantity, size, color) => {
     try {
-      const res = await apiClient.patch(`/cart/item/${productId}`, { quantity });
+      const body = { quantity };
+      if (size  !== undefined) body.size  = size;
+      if (color !== undefined) body.color = color;
+
+      const res = await apiClient.patch(`/cart/item/${productId}`, body);
       if (res.data.success) {
         setCart(res.data.cart);
         const count = res.data.cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
@@ -145,9 +158,13 @@ export const StoreProvider = ({ children }) => {
   }, []);
 
   // ── Cart: remove item ─────────────────────────────────────────────────────
-  const removeFromCart = useCallback(async (productId) => {
+  const removeFromCart = useCallback(async (productId, size, color) => {
     try {
-      const res = await apiClient.delete(`/cart/item/${productId}`);
+      const params = {};
+      if (size  !== undefined && size  !== null) params.size  = size;
+      if (color !== undefined && color !== null) params.color = color;
+
+      const res = await apiClient.delete(`/cart/item/${productId}`, { params });
       if (res.data.success) {
         setCart(res.data.cart);
         const count = res.data.cart.items?.reduce((s, i) => s + i.quantity, 0) || 0;
