@@ -17,6 +17,7 @@ import CustomerProfile    from './components/CustomerProfile';
 import CheckoutCallback   from './components/CheckoutCallback';
 import ResellerProfile    from './components/ResellerProfile';
 import SearchPage         from './components/SearchPage';   // ← NEW
+import SessionExpiredBanner from './components/SessionExpiredBanner'; // ← NEW
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -43,6 +44,11 @@ const GuestRoute = ({ children }) => {
 function AppRoutes() {
   return (
     <div className="app">
+      {/* Mounted once, above everything — reacts to a 401 from ANY axios
+          call (admin, reseller, or customer) fired via notifySessionExpired()
+          in api/client.js. Needs to sit inside <Router> because it calls
+          useNavigate() to send the person to the right login screen. */}
+      <SessionExpiredBanner />
       <Navbar />
       <Routes>
         {/* ── Public storefront ──────────────────────────────────────── */}

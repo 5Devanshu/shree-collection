@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
+import { notifySessionExpired } from '../utils/sessionExpiry';
 
 const StoreContext = createContext(null);
 const API = import.meta.env.VITE_API_URL || '/api';
@@ -14,6 +15,7 @@ const getOrCreateSessionId = () => {
 };
 
 const apiClient = axios.create({ baseURL: API });
+
 apiClient.interceptors.request.use((config) => {
   config.headers['x-session-id'] = getOrCreateSessionId();
   const resellerToken = localStorage.getItem('resellerToken');
@@ -23,6 +25,36 @@ apiClient.interceptors.request.use((config) => {
   if (config.data instanceof FormData) delete config.headers['Content-Type'];
   return config;
 });
+
+// ── Session expiry detection ────────────────────────────────────────────────
+// A 401 here means whichever token we attached (reseller or customer) is
+// invalid/expired. We don't touch the CART session id (x-session-id) — that's
+// a guest-cart identifier, not an auth token, and stays valid regardless.
+// Clear only the auth token that was actually in use, then let the shared
+// banner (mounted once near the app root) tell the person to log in again.
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401) {
+      const hadReseller = !!localStorage.getItem('resellerToken');
+      const hadCustomer = !!localStorage.getItem('shree_customer_token');
+
+      if (hadReseller) {
+        localStorage.removeItem('resellerToken');
+        localStorage.removeItem('resellerUser');
+        notifySessionExpired('reseller');
+      } else if (hadCustomer) {
+        localStorage.removeItem('shree_customer_token');
+        localStorage.removeItem('shree_customer_user');
+        notifySessionExpired('customer');
+      }
+      // If neither token was set, this was just an unauthenticated guest
+      // request (e.g. cart calls don't require login) — nothing expired,
+      // so no banner.
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const StoreProvider = ({ children }) => {
 
@@ -53,6 +85,22 @@ export const StoreProvider = ({ children }) => {
   const [isReseller, setIsReseller] = useState(
     () => !!localStorage.getItem('resellerToken')
   );
+
+  // React to the session-expired event by clearing local auth state too
+  // (localStorage is already cleared by the interceptor above — this just
+  // keeps `customer`/`reseller`/`isReseller` in sync so the UI immediately
+  // reflects "logged out" instead of showing stale reseller/customer chrome).
+  useEffect(() => {
+    const handleStorageDrivenLogout = () => {
+      if (!localStorage.getItem('shree_customer_token')) setCustomer(null);
+      if (!localStorage.getItem('resellerToken')) {
+        setReseller(null);
+        setIsReseller(false);
+      }
+    };
+    window.addEventListener('shree:session-expired', handleStorageDrivenLogout);
+    return () => window.removeEventListener('shree:session-expired', handleStorageDrivenLogout);
+  }, []);
 
   // ── Cart ──────────────────────────────────────────────────────────────────
   const [cart,        setCart]        = useState({ items: [], subtotal: 0, shippingCost: 0, total: 0 });
@@ -116,11 +164,6 @@ export const StoreProvider = ({ children }) => {
   }, []);
 
   // ── Cart: add ─────────────────────────────────────────────────────────────
-  // `size` and `color` are optional — required by the backend only when the
-  // product (and, for colour, the chosen size) actually has those options.
-  // ProductCard calls this with just (productOrId, quantity) as before;
-  // ProductDescription calls it with all five args once a size/colour has
-  // been validated client-side.
   const addToCart = useCallback(async (productOrId, quantity = 1, price, size, color) => {
     try {
       const productId = productOrId && typeof productOrId === 'object'

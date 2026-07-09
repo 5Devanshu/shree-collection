@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { notifySessionExpired } from '../utils/sessionExpiry';
 
 const client = axios.create({
   baseURL: import.meta.env.VITE_API_URL,
@@ -22,6 +23,12 @@ client.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
+  // Tag this specific request with WHICH token it actually sent, so the
+  // response interceptor knows exactly whose session expired on a 401 —
+  // rather than guessing from the URL (which broke for any admin route not
+  // in the old hardcoded list, e.g. /products, /orders).
+  config.__tokenType = adminToken ? 'admin' : resellerToken ? 'reseller' : customerToken ? 'customer' : null;
+
   // Guest cart session — same key StoreContext uses
   if (sessionId) {
     config.headers['x-session-id'] = sessionId;
@@ -37,7 +44,7 @@ client.interceptors.request.use((config) => {
       method: config.method?.toUpperCase(),
       url: config.baseURL + config.url,
       hasToken: !!token,
-      tokenType: adminToken ? 'admin' : resellerToken ? 'reseller' : customerToken ? 'customer' : 'none',
+      tokenType: config.__tokenType || 'none',
       hasSessionId: !!sessionId,
     });
   }
@@ -70,19 +77,30 @@ client.interceptors.response.use(
       });
     }
 
-    // 401 on an admin route — clear admin token and redirect to admin login
+    // 401 — the token this specific request sent (if any) is invalid or
+    // expired. Clear ONLY that token/user pair and show the shared
+    // session-expired banner (mounted once near the app root) rather than
+    // hard-redirecting — the person gets a clear warning and a "Log In
+    // Again" button instead of being yanked off the page mid-action.
     if (error.response?.status === 401) {
-      const url = error.config?.url || '';
-      const isAdminRoute =
-        url.includes('/upload') ||
-        url.includes('/categories') ||
-        url.includes('/discounts') ||
-        url.includes('/stock-notify');
+      const tokenType = error.config?.__tokenType;
 
-      if (isAdminRoute && localStorage.getItem('shree_admin_token')) {
+      if (tokenType === 'admin') {
         localStorage.removeItem('shree_admin_token');
-        window.location.href = '/admin/login';
+        localStorage.removeItem('adminUser');
+        notifySessionExpired('admin');
+      } else if (tokenType === 'reseller') {
+        localStorage.removeItem('resellerToken');
+        localStorage.removeItem('resellerUser');
+        notifySessionExpired('reseller');
+      } else if (tokenType === 'customer') {
+        localStorage.removeItem('shree_customer_token');
+        localStorage.removeItem('shree_customer_user');
+        notifySessionExpired('customer');
       }
+      // tokenType === null means this request never sent a token in the
+      // first place (a guest cart call, a public GET, etc.) — a 401 there
+      // isn't a session expiry, so no banner.
     }
 
     // Preserve the backend error code (e.g. NOT_VERIFIED) for the login page
