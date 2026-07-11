@@ -73,9 +73,9 @@ const Checkout = () => {
     if (error) setError('');
   };
 
-  const handleQtyChange = async (productId, newQty, size) => {
-    if (newQty < 1) { await removeFromCart(productId, size); return; }
-    await updateCartItem(productId, newQty, size);
+  const handleQtyChange = async (productId, newQty, size, color) => {
+    if (newQty < 1) { await removeFromCart(productId, size, color); return; }
+    await updateCartItem(productId, newQty, size, color);
   };
 
   const handleSubmit = async (e) => {
@@ -306,16 +306,16 @@ const Checkout = () => {
                     )}
                     <div className="summary-item-qty-controls">
                       <button type="button" className="qty-btn"
-                        onClick={() => handleQtyChange(productId, item.quantity - 1, item.size)}>
+                        onClick={() => handleQtyChange(productId, item.quantity - 1, item.size, item.color)}>
                         −
                       </button>
                       <span className="qty-value">{item.quantity}</span>
                       <button type="button" className="qty-btn"
-                        onClick={() => handleQtyChange(productId, item.quantity + 1, item.size)}>
+                        onClick={() => handleQtyChange(productId, item.quantity + 1, item.size, item.color)}>
                         +
                       </button>
                       <button type="button" className="qty-remove"
-                        onClick={() => removeFromCart(productId, item.size)}>
+                        onClick={() => removeFromCart(productId, item.size, item.color)}>
                         Remove
                       </button>
                     </div>
