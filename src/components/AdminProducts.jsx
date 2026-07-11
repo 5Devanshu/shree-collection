@@ -4,6 +4,7 @@ import {
   updateProduct, deleteProduct, uploadImage,
 } from '../api/client';
 import SizeManager from './SizeManager';
+import ColorManager from './ColorManager';
 
 const EMPTY_FORM = {
   title: '', material: '', category: '', price: '', resellerPrice: '', stock: '10',
@@ -14,6 +15,12 @@ const EMPTY_FORM = {
   sizeLabel: '',
   // [{ size, stock, price, resellerPrice, colors: [{ color, stock, image, imageKey }] }]
   sizeStock: [],
+  // ── Colours — INDEPENDENT of sizing. A product can have colours with no
+  // sizes at all, sizes with no colours here (use per-size colours instead),
+  // or neither. Not meant to be combined with sizeEnabled on the same product.
+  colorEnabled: false,
+  // [{ color, stock, image, imageKey }]
+  colors: [],
 };
 
 const labelStyle = {
@@ -55,6 +62,10 @@ const AdminProducts = () => {
   // reported bottom-up by SizeManager. Used to block Save.
   const [sizeImagesUploading, setSizeImagesUploading] = useState(false);
 
+  // True whenever any TOP-LEVEL colour image (independent of sizing) is
+  // mid-upload — reported by ColorManager directly (no size wrapper here).
+  const [colorImagesUploading, setColorImagesUploading] = useState(false);
+
   const [imagePreview, setImagePreview] = useState('');
 
   const loadData = useCallback(async () => {
@@ -81,6 +92,7 @@ const AdminProducts = () => {
     setForm(EMPTY_FORM); setEditingId(null);
     setImagePreview('');
     setSizeImagesUploading(false);
+    setColorImagesUploading(false);
     setFormError(''); setShowModal(true);
   };
 
@@ -104,6 +116,15 @@ const AdminProducts = () => {
         ? p.sizes.map(s => ({ size: Number(s), stock: 0, price: 0, resellerPrice: 0, colors: [] }))
         : [];
 
+    const colors = Array.isArray(p.colors)
+      ? p.colors.map(c => ({
+          color:    c.color    || '',
+          stock:    Number(c.stock) || 0,
+          image:    c.image    || '',
+          imageKey: c.imageKey || '',
+        }))
+      : [];
+
     setForm({
       title:         p.title        || '',
       material:      p.material     || '',
@@ -122,10 +143,13 @@ const AdminProducts = () => {
       sizeEnabled:   p.sizeEnabled || false,
       sizeLabel:     p.sizeLabel   || '',
       sizeStock,
+      colorEnabled:  p.colorEnabled || false,
+      colors,
     });
     setEditingId(p.id);
     setImagePreview(p.imageUrl || p.image?.url || p.image || '');
     setSizeImagesUploading(false);
+    setColorImagesUploading(false);
     setFormError(''); setShowModal(true);
   };
 
@@ -134,6 +158,7 @@ const AdminProducts = () => {
     setForm(EMPTY_FORM); setFormError('');
     setImagePreview('');
     setSizeImagesUploading(false);
+    setColorImagesUploading(false);
   };
 
   const handleChange = (e) => {
@@ -159,6 +184,12 @@ const AdminProducts = () => {
       }
       return { ...prev, sizeEnabled: next, sizeLabel: label };
     });
+  };
+
+  // Independent of handleToggleSizeEnabled — no shared state, no category
+  // auto-label (colours don't need one the way size does).
+  const handleToggleColorEnabled = () => {
+    setForm(prev => ({ ...prev, colorEnabled: !prev.colorEnabled }));
   };
 
   const handleImageUpload = async (e) => {
@@ -209,7 +240,10 @@ const AdminProducts = () => {
     if (form.sizeEnabled && form.sizeStock.length === 0) {
       return setFormError('Please add at least one size, or turn off sizing.');
     }
-    if (sizeImagesUploading) {
+    if (form.colorEnabled && form.colors.length === 0) {
+      return setFormError('Please add at least one colour, or turn off colours.');
+    }
+    if (sizeImagesUploading || colorImagesUploading) {
       return setFormError('Please wait for colour image uploads to finish.');
     }
 
@@ -237,6 +271,10 @@ const AdminProducts = () => {
               ...s,
               colors: (s.colors || []).map(c => ({ ...c, color: c.color.trim() })),
             }))
+          : [],
+        colorEnabled:  form.colorEnabled,
+        colors:        form.colorEnabled
+          ? form.colors.map(c => ({ ...c, color: c.color.trim() }))
           : [],
       };
       if (editingId) { await updateProduct(editingId, payload); }
@@ -616,10 +654,53 @@ const AdminProducts = () => {
                 )}
               </div>
 
+              {/* ── Colours — fully independent of the Sizes section above.
+                   Use this for products that come in multiple colours but
+                   aren't sized (e.g. earrings, chains). If a product needs
+                   BOTH sizes and per-size colours, use the colour variants
+                   inside each size above instead of this section. ── */}
+              <div style={{ marginBottom:'1.5rem' }}>
+                <label style={labelStyle}>Colours</label>
+
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: form.colorEnabled ? '1rem' : 0 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
+                    <div onClick={handleToggleColorEnabled}
+                      style={{ width:44, height:24, borderRadius:12, cursor:'pointer', background: form.colorEnabled ? '#735c00' : '#ddd', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+                      <div style={{ position:'absolute', top:2, left: form.colorEnabled ? 22 : 2, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:'0.9rem' }}>This product has colours</div>
+                      <div style={{ fontSize:'0.77rem', color:'#aaa' }}>
+                        {form.colorEnabled ? 'Customers will choose a colour before buying' : 'No colour selector will be shown to customers'}
+                      </div>
+                    </div>
+                  </label>
+                </div>
+
+                {form.colorEnabled && (
+                  <div style={{ padding:'1rem', background:'#faf7f2', border:'1px solid #e8e0d5', borderRadius:8 }}>
+                    <p style={{ margin:'0 0 0.75rem', fontSize:'0.75rem', color:'#aaa' }}>
+                      Add one or more colours — each gets its own stock count and photo.
+                      Total stock across all colours becomes this product's stock automatically.
+                    </p>
+                    <div style={{ marginBottom:'0.75rem', fontSize:'0.8rem', color:'#735c00', fontWeight:600 }}>
+                      Total stock across all colours: {form.colors.reduce((sum, c) => sum + (Number(c.stock) || 0), 0)}
+                    </div>
+
+                    <ColorManager
+                      colors={form.colors}
+                      onChange={(nextColors) => setForm(prev => ({ ...prev, colors: nextColors }))}
+                      onUploadingChange={setColorImagesUploading}
+                      onError={setFormError}
+                    />
+                  </div>
+                )}
+              </div>
+
               {/* Actions */}
               <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.75rem', paddingTop:'1.25rem', borderTop:'1px solid #f0ebe3' }}>
                 <button onClick={closeModal} disabled={saving} style={{ background:'#f5f5f5', border:'1px solid #ddd', borderRadius:8, padding:'0.7rem 1.8rem', cursor:'pointer', fontFamily:'inherit', fontSize:'0.9rem', fontWeight:500 }}>Cancel</button>
-                <button onClick={handleSave} disabled={saving || imageUploading || sizeImagesUploading} style={{ background: saving ? '#ccc' : '#735c00', color:'#fff', border:'none', borderRadius:8, padding:'0.7rem 2rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily:'inherit', fontSize:'0.9rem', fontWeight:600 }}>
+                <button onClick={handleSave} disabled={saving || imageUploading || sizeImagesUploading || colorImagesUploading} style={{ background: saving ? '#ccc' : '#735c00', color:'#fff', border:'none', borderRadius:8, padding:'0.7rem 2rem', cursor: saving ? 'not-allowed' : 'pointer', fontFamily:'inherit', fontSize:'0.9rem', fontWeight:600 }}>
                   {saving ? 'Saving…' : editingId ? 'Update Product' : 'Save Product'}
                 </button>
               </div>
