@@ -130,6 +130,19 @@ const ProductDescription = () => {
   const getColorVariant   = (colorName) => sizeColors.find(c => c.color === colorName) || null;
   const selectedColorEntry = colorsRequired ? getColorVariant(selectedColor) : null;
 
+  // ── Product-level colours — INDEPENDENT of sizing ────────────────────────
+  // Only takes effect when the size-nested colour flow above isn't in play,
+  // since a product should use one variant scheme or the other, not both.
+  const topLevelColorsActive = !colorsRequired && !!product.colorEnabled && Array.isArray(product.colors) && product.colors.length > 0;
+  const getTopLevelColorVariant = (colorName) => product.colors.find(c => c.color === colorName) || null;
+  const selectedTopLevelColorEntry = topLevelColorsActive ? getTopLevelColorVariant(selectedColor) : null;
+
+  // True whenever ANY colour selection (size-nested or top-level) is in play
+  // — used everywhere the two flows need to be treated identically
+  // (validation, cart payload, image swap).
+  const colorSelectionActive = colorsRequired || topLevelColorsActive;
+  const activeColorEntry     = colorsRequired ? selectedColorEntry : selectedTopLevelColorEntry;
+
   // Stock for the currently selected size (+colour, if this size has colours)
   const stockForSize = (size) => {
     const entry = getSizeEntry(size);
@@ -163,12 +176,16 @@ const ProductDescription = () => {
   };
   const outOfStock = sizingActive
     ? (hasSizeStock ? product.sizes.every(isSizeOut) : (product.stock ?? 0) === 0)
-    : (product.stock ?? 0) === 0;
+    : topLevelColorsActive
+      ? product.colors.every(c => (Number(c.stock) || 0) <= 0)
+      : (product.stock ?? 0) === 0;
 
   // ── Image resolution ─────────────────────────────────────────────────────
   const selectedImage = colorsRequired
     ? (selectedColorEntry?.image || null)
-    : (sizingActive && selectedSizeEntry?.displayImage ? selectedSizeEntry.displayImage : null);
+    : topLevelColorsActive
+      ? (selectedTopLevelColorEntry?.image || null)
+      : (sizingActive && selectedSizeEntry?.displayImage ? selectedSizeEntry.displayImage : null);
 
   const displayImages = selectedImage
     ? [selectedImage, ...allImages.filter(img => img !== selectedImage)]
@@ -198,7 +215,7 @@ const ProductDescription = () => {
     } else {
       setSizeError('');
     }
-    if (colorsRequired && !selectedColor) {
+    if (colorSelectionActive && !selectedColor) {
       setColorError('Please select a colour');
       ok = false;
     } else {
@@ -220,7 +237,7 @@ const ProductDescription = () => {
   const handleAddToCart = () => {
     if (!requireAuth()) return;
     if (!validateSelection()) return;
-    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined, colorsRequired ? selectedColor : undefined);
+    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined, colorSelectionActive ? selectedColor : undefined);
     setAddedToCart(true);
     setTimeout(() => setAddedToCart(false), 2000);
   };
@@ -228,7 +245,7 @@ const ProductDescription = () => {
   const handleBuyNow = () => {
     if (!requireAuth()) return;
     if (!validateSelection()) return;
-    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined, colorsRequired ? selectedColor : undefined);
+    addToCart(product, 1, activePrice, sizingActive ? selectedSize : undefined, colorSelectionActive ? selectedColor : undefined);
     navigate('/checkout');
   };
 
@@ -330,19 +347,24 @@ const ProductDescription = () => {
     );
   };
 
-  // ── Colour selector — appears only once a size WITH colour variants is picked ──
+  // ── Colour selector — either size-nested (appears once a size WITH colour
+  // variants is picked) or top-level/independent of sizing. Never both at
+  // once: colorsRequired takes precedence if a product somehow has both. ──
   const ColorSelector = ({ mobile = false }) => {
-    if (!colorsRequired) return null;
+    if (!colorSelectionActive) return null;
+
+    const colorList = colorsRequired ? sizeColors : product.colors;
 
     return (
       <div className={mobile ? 'mpd-section' : 'pd-size-section'} style={!mobile ? { marginTop: '1.25rem' } : undefined}>
         <div className={mobile ? 'mpd-size-header' : 'pd-size-header'}>
           <h3 className={mobile ? 'mpd-section-title' : 'label-md'}>
-            Colour <span style={{ fontWeight: 400, opacity: 0.6 }}>for {formatSize(selectedSize)}</span>
+            Colour
+            {colorsRequired && <span style={{ fontWeight: 400, opacity: 0.6 }}> for {formatSize(selectedSize)}</span>}
           </h3>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-          {sizeColors.map(c => {
+          {colorList.map(c => {
             const disabled = stockForColor(c) <= 0;
             return (
               <button
@@ -376,9 +398,9 @@ const ProductDescription = () => {
         {colorError && (
           <p style={{ color: '#c0392b', fontSize: '0.8rem', marginTop: 8 }}>{colorError}</p>
         )}
-        {selectedColorEntry && stockForColor(selectedColorEntry) > 0 && stockForColor(selectedColorEntry) <= 5 && (
+        {activeColorEntry && stockForColor(activeColorEntry) > 0 && stockForColor(activeColorEntry) <= 5 && (
           <p style={{ color: '#92600e', fontSize: '0.8rem', marginTop: 8 }}>
-            Only {stockForColor(selectedColorEntry)} left in {selectedColorEntry.color}
+            Only {stockForColor(activeColorEntry)} left in {activeColorEntry.color}
           </p>
         )}
       </div>
