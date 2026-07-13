@@ -28,14 +28,31 @@ const removeCategoryDiscount = async (slug, products) => {
   ));
 };
 
+// ── Per-size discount patch helper ─────────────────────────────────────────────
+// Sends the FULL sizeStock array back with just one size's discount fields
+// changed — matches normalizeSizeStock()'s expected shape on the backend
+// (size, stock, price, resellerPrice, discountEnabled, discountPercent, colors).
+// Never touches stock/price/colors for any size — only the two discount keys
+// on the target size are modified.
+const setSizeDiscount = async (product, size, { discountEnabled, discountPercent }) => {
+  const id = product.id || product._id;
+  const nextSizeStock = (product.sizeStock || []).map(s =>
+    Number(s.size) === Number(size)
+      ? { ...s, discountEnabled, discountPercent: Number(discountPercent) || 0 }
+      : s
+  );
+  await client.patch(`/products/${id}`, { sizeStock: nextSizeStock });
+};
+
 const AdminDiscounts = () => {
   const { products, categories, loadProducts } = useStore();
 
-  const [tab,     setTab]     = useState('products');
-  const [search,  setSearch]  = useState('');
-  const [msg,     setMsg]     = useState('');
-  const [error,   setError]   = useState('');
-  const [loading, setLoading] = useState({});
+  const [tab,          setTab]          = useState('products');
+  const [search,        setSearch]       = useState('');
+  const [msg,           setMsg]          = useState('');
+  const [error,         setError]        = useState('');
+  const [loading,       setLoading]      = useState({});
+  const [expandedSizes, setExpandedSizes] = useState({}); // { [productId]: bool }
 
   const flash = (type, text) => {
     if (type === 'success') { setMsg(text); setError(''); }
@@ -45,6 +62,8 @@ const AdminDiscounts = () => {
 
   const setLoad  = (id, val) => setLoading(prev => ({ ...prev, [id]: val }));
   const refresh  = () => loadProducts?.();
+
+  const toggleExpanded = (id) => setExpandedSizes(prev => ({ ...prev, [id]: !prev[id] }));
 
   // ── Product discount handlers ─────────────────────────────────────────────
   const handleSetDiscount = async (product, percent) => {
@@ -88,6 +107,23 @@ const AdminDiscounts = () => {
       flash('success', `Discount removed from "${product.title}"`);
     } catch (err) { flash('error', err.message); }
     finally { setLoad(id, false); }
+  };
+
+  // ── Per-size discount handler ─────────────────────────────────────────────
+  const handleSetSizeDiscount = async (product, size, discountEnabled, percent) => {
+    const key = `${product.id || product._id}_size_${size}`;
+    const p = discountEnabled === false ? 0 : parseFloat(percent) || 0;
+    if (discountEnabled !== false && (isNaN(p) || p < 0 || p > 100)) {
+      flash('error', 'Enter a value between 0 and 100');
+      return;
+    }
+    setLoad(key, true);
+    try {
+      await setSizeDiscount(product, size, { discountEnabled, discountPercent: p });
+      refresh();
+      flash('success', `Discount updated for size ${size} on "${product.title}"`);
+    } catch (err) { flash('error', err.message); }
+    finally { setLoad(key, false); }
   };
 
   // ── Category discount handlers ────────────────────────────────────────────
@@ -176,16 +212,31 @@ const AdminDiscounts = () => {
               {filteredProducts.length === 0 && (
                 <tr><td colSpan={6} style={{ textAlign: 'center', padding: 'var(--spacing-12)', color: 'var(--on-surface-variant)' }}>No products found</td></tr>
               )}
-              {filteredProducts.map(p => (
-                <ProductDiscountRow
-                  key={p.id || p._id}
-                  product={p}
-                  isLoading={!!loading[p.id || p._id]}
-                  onSetDiscount={handleSetDiscount}
-                  onToggle={handleToggle}
-                  onRemove={handleRemove}
-                />
-              ))}
+              {filteredProducts.map(p => {
+                const id = p.id || p._id;
+                const hasSizes = p.sizeEnabled && Array.isArray(p.sizeStock) && p.sizeStock.length > 0;
+                return (
+                  <React.Fragment key={id}>
+                    <ProductDiscountRow
+                      product={p}
+                      isLoading={!!loading[id]}
+                      onSetDiscount={handleSetDiscount}
+                      onToggle={handleToggle}
+                      onRemove={handleRemove}
+                      hasSizes={hasSizes}
+                      expanded={!!expandedSizes[id]}
+                      onToggleExpanded={() => toggleExpanded(id)}
+                    />
+                    {hasSizes && expandedSizes[id] && (
+                      <SizeDiscountRows
+                        product={p}
+                        loading={loading}
+                        onSetSizeDiscount={handleSetSizeDiscount}
+                      />
+                    )}
+                  </React.Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -227,7 +278,10 @@ const AdminDiscounts = () => {
 };
 
 // ── Product row ───────────────────────────────────────────────────────────────
-const ProductDiscountRow = ({ product, isLoading, onSetDiscount, onToggle, onRemove }) => {
+const ProductDiscountRow = ({
+  product, isLoading, onSetDiscount, onToggle, onRemove,
+  hasSizes, expanded, onToggleExpanded,
+}) => {
   const [percent, setPercent] = useState(
     product.discountPercent != null ? String(product.discountPercent) : ''
   );
@@ -247,6 +301,18 @@ const ProductDiscountRow = ({ product, isLoading, onSetDiscount, onToggle, onRem
             <div style={{ fontSize: '0.75rem', color: 'var(--on-surface-variant)' }}>
               {product.category?.name || product.categorySlug || '—'}
             </div>
+            {hasSizes && (
+              <button
+                onClick={onToggleExpanded}
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  marginTop: 4, fontSize: '0.72rem', color: '#735c00', fontWeight: 600,
+                  textDecoration: 'underline',
+                }}
+              >
+                {expanded ? 'Hide sizes ▲' : `Set per-size discount (${product.sizeStock.length} sizes) ▼`}
+              </button>
+            )}
           </div>
         </div>
       </td>
@@ -262,6 +328,11 @@ const ProductDiscountRow = ({ product, isLoading, onSetDiscount, onToggle, onRem
           <button className="btn btn-tertiary" onClick={() => onSetDiscount(product, percent)}
             disabled={isLoading} style={{ fontSize: '0.75rem' }}>Set</button>
         </div>
+        {hasSizes && (
+          <div style={{ fontSize: '0.7rem', color: 'var(--on-surface-variant)', marginTop: 4 }}>
+            Product default — sizes without their own override use this
+          </div>
+        )}
       </td>
       <td className="body-lg">
         {product.discountEnabled && Number(product.discountPercent) > 0
@@ -289,6 +360,91 @@ const ProductDiscountRow = ({ product, isLoading, onSetDiscount, onToggle, onRem
           )}
         </div>
       </td>
+    </tr>
+  );
+};
+
+// ── Per-size discount rows — expands under a sized product ─────────────────────
+// One sub-row per size, each with its own inherit/on/off + percent control,
+// mirroring the same discountEnabled/discountPercent shape SizeManager.jsx
+// uses in the product-edit modal. "Set" here PATCHes only that size's two
+// discount fields, leaving stock/price/colors for every size untouched.
+const SizeDiscountRows = ({ product, loading, onSetSizeDiscount }) => {
+  const id = product.id || product._id;
+
+  return (
+    <>
+      {product.sizeStock.map((s) => (
+        <SizeDiscountRow
+          key={`${id}_size_${s.size}`}
+          product={product}
+          sizeEntry={s}
+          isLoading={!!loading[`${id}_size_${s.size}`]}
+          onSetSizeDiscount={onSetSizeDiscount}
+        />
+      ))}
+    </>
+  );
+};
+
+const SizeDiscountRow = ({ product, sizeEntry, isLoading, onSetSizeDiscount }) => {
+  const { size, discountEnabled, discountPercent } = sizeEntry;
+
+  const initialSelect =
+    discountEnabled === null || discountEnabled === undefined
+      ? 'inherit'
+      : discountEnabled ? 'on' : 'off';
+
+  const [selectValue, setSelectValue] = useState(initialSelect);
+  const [percent,     setPercent]     = useState(discountPercent ? String(discountPercent) : '');
+
+  const handleSet = () => {
+    const nextDiscountEnabled = selectValue === 'inherit' ? null : selectValue === 'on';
+    onSetSizeDiscount(product, size, nextDiscountEnabled, percent);
+  };
+
+  const baseLabel = product.discountEnabled
+    ? `${product.discountPercent || 0}% on`
+    : 'off';
+
+  return (
+    <tr style={{ background: 'var(--surface-container-lowest)' }}>
+      <td style={{ paddingLeft: 'var(--spacing-8)' }}>
+        <span style={{ fontSize: '0.85rem', color: 'var(--on-surface-variant)' }}>
+          Size <strong style={{ color: 'var(--on-surface)' }}>{size}</strong>
+        </span>
+      </td>
+      <td className="body-lg" style={{ fontSize: '0.85rem' }}>
+        {Number(sizeEntry.price) > 0 ? `₹${Number(sizeEntry.price).toLocaleString()}` : <span style={{ color: 'var(--on-surface-variant)' }}>uses base</span>}
+      </td>
+      <td>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <select
+            value={selectValue}
+            onChange={e => setSelectValue(e.target.value)}
+            style={{ padding: '6px 8px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-lowest)', fontFamily: 'var(--font-sans)', fontSize: '0.82rem' }}
+          >
+            <option value="inherit">Inherit ({baseLabel})</option>
+            <option value="on">Force ON</option>
+            <option value="off">Force OFF</option>
+          </select>
+          {selectValue !== 'off' && (
+            <>
+              <input
+                type="number" min="0" max="100" value={percent}
+                placeholder={product.discountPercent ? String(product.discountPercent) : '0'}
+                onChange={e => setPercent(e.target.value)}
+                style={{ width: 64, padding: '6px 8px', border: '1px solid var(--outline-variant)', background: 'var(--surface-container-lowest)', fontFamily: 'var(--font-sans)', fontSize: '0.85rem' }}
+              />
+              <span style={{ fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>%</span>
+            </>
+          )}
+          <button className="btn btn-tertiary" onClick={handleSet} disabled={isLoading} style={{ fontSize: '0.72rem' }}>
+            {isLoading ? '…' : 'Set'}
+          </button>
+        </div>
+      </td>
+      <td colSpan={3} />
     </tr>
   );
 };
