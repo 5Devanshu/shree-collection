@@ -10,10 +10,15 @@ const EMPTY_FORM = {
   title: '', material: '', category: '', price: '', resellerPrice: '', stock: '10',
   description: '', isFeatured: false, image: '', gallery: [],
   colour: '', plating: '', stoneType: '', sku: '',
+  // ── Discount — product-level default. Sizes below can each override this
+  // individually (inherit / force on / force off) via SizeManager. Resellers
+  // never receive a discount regardless of these settings.
+  discountEnabled: false,
+  discountPercent: '',
   // ── Sizing ──
   sizeEnabled: false,
   sizeLabel: '',
-  // [{ size, stock, price, resellerPrice, colors: [{ color, stock, image, imageKey }] }]
+  // [{ size, stock, price, resellerPrice, discountEnabled, discountPercent, colors: [{ color, stock, image, imageKey }] }]
   sizeStock: [],
   // ── Colours — INDEPENDENT of sizing. A product can have colours with no
   // sizes at all, sizes with no colours here (use per-size colours instead),
@@ -99,10 +104,12 @@ const AdminProducts = () => {
   const openEdit = (p) => {
     const sizeStock = Array.isArray(p.sizeStock) && p.sizeStock.length > 0
       ? p.sizeStock.map(s => ({
-          size:          Number(s.size),
-          stock:         Number(s.stock) || 0,
-          price:         Number(s.price) || 0,
-          resellerPrice: Number(s.resellerPrice) || 0,
+          size:            Number(s.size),
+          stock:           Number(s.stock) || 0,
+          price:           Number(s.price) || 0,
+          resellerPrice:   Number(s.resellerPrice) || 0,
+          discountEnabled: typeof s.discountEnabled === 'boolean' ? s.discountEnabled : null,
+          discountPercent: Number(s.discountPercent) || 0,
           colors: Array.isArray(s.colors)
             ? s.colors.map(c => ({
                 color:    c.color    || '',
@@ -113,7 +120,10 @@ const AdminProducts = () => {
             : [],
         }))
       : Array.isArray(p.sizes)
-        ? p.sizes.map(s => ({ size: Number(s), stock: 0, price: 0, resellerPrice: 0, colors: [] }))
+        ? p.sizes.map(s => ({
+            size: Number(s), stock: 0, price: 0, resellerPrice: 0,
+            discountEnabled: null, discountPercent: 0, colors: [],
+          }))
         : [];
 
     const colors = Array.isArray(p.colors)
@@ -126,24 +136,26 @@ const AdminProducts = () => {
       : [];
 
     setForm({
-      title:         p.title        || '',
-      material:      p.material     || '',
-      category:      p.categoryId   || p.category?.id || p.category || '',
-      price:         p.price        ?? '',
-      resellerPrice: p.resellerPrice ?? '',
-      stock:         p.stock        ?? 10,
-      description:   p.description  || '',
-      isFeatured:    p.isFeatured   || false,
-      image:         p.imageUrl     || p.image?.url || p.image || '',
-      gallery:       Array.isArray(p.gallery) ? p.gallery : [],
-      colour:        p.colour    || '',
-      plating:       p.plating   || '',
-      stoneType:     p.stoneType || '',
-      sku:           p.sku       || '',
-      sizeEnabled:   p.sizeEnabled || false,
-      sizeLabel:     p.sizeLabel   || '',
+      title:           p.title        || '',
+      material:        p.material     || '',
+      category:        p.categoryId   || p.category?.id || p.category || '',
+      price:           p.price        ?? '',
+      resellerPrice:   p.resellerPrice ?? '',
+      stock:           p.stock        ?? 10,
+      description:     p.description  || '',
+      isFeatured:      p.isFeatured   || false,
+      image:           p.imageUrl     || p.image?.url || p.image || '',
+      gallery:         Array.isArray(p.gallery) ? p.gallery : [],
+      colour:          p.colour    || '',
+      plating:         p.plating   || '',
+      stoneType:       p.stoneType || '',
+      sku:             p.sku       || '',
+      discountEnabled: p.discountEnabled || false,
+      discountPercent: p.discountPercent ?? '',
+      sizeEnabled:     p.sizeEnabled || false,
+      sizeLabel:       p.sizeLabel   || '',
       sizeStock,
-      colorEnabled:  p.colorEnabled || false,
+      colorEnabled:    p.colorEnabled || false,
       colors,
     });
     setEditingId(p.id);
@@ -190,6 +202,10 @@ const AdminProducts = () => {
   // auto-label (colours don't need one the way size does).
   const handleToggleColorEnabled = () => {
     setForm(prev => ({ ...prev, colorEnabled: !prev.colorEnabled }));
+  };
+
+  const handleToggleDiscountEnabled = () => {
+    setForm(prev => ({ ...prev, discountEnabled: !prev.discountEnabled }));
   };
 
   const handleImageUpload = async (e) => {
@@ -250,30 +266,32 @@ const AdminProducts = () => {
     setSaving(true);
     try {
       const payload = {
-        title:         form.title.trim(),
-        material:      form.material.trim(),
-        category:      form.category,
-        price:         Number(form.price),
-        resellerPrice: Number(form.resellerPrice) || 0,
-        image:         { url: form.image },
-        description:   form.description.trim(),
-        isFeatured:    form.isFeatured,
-        gallery:       Array.isArray(form.gallery) ? form.gallery : [],
-        stock:         Number(form.stock) || 0,
-        colour:        form.colour.trim(),
-        plating:       form.plating.trim(),
-        stoneType:     form.stoneType.trim(),
-        sku:           form.sku.trim(),
-        sizeEnabled:   form.sizeEnabled,
-        sizeLabel:     form.sizeLabel.trim(),
-        sizeStock:     form.sizeEnabled
+        title:           form.title.trim(),
+        material:        form.material.trim(),
+        category:        form.category,
+        price:           Number(form.price),
+        resellerPrice:   Number(form.resellerPrice) || 0,
+        image:           { url: form.image },
+        description:     form.description.trim(),
+        isFeatured:      form.isFeatured,
+        gallery:         Array.isArray(form.gallery) ? form.gallery : [],
+        stock:           Number(form.stock) || 0,
+        colour:          form.colour.trim(),
+        plating:         form.plating.trim(),
+        stoneType:       form.stoneType.trim(),
+        sku:             form.sku.trim(),
+        discountEnabled: form.discountEnabled,
+        discountPercent: Number(form.discountPercent) || 0,
+        sizeEnabled:     form.sizeEnabled,
+        sizeLabel:       form.sizeLabel.trim(),
+        sizeStock:       form.sizeEnabled
           ? form.sizeStock.map(s => ({
               ...s,
               colors: (s.colors || []).map(c => ({ ...c, color: c.color.trim() })),
             }))
           : [],
-        colorEnabled:  form.colorEnabled,
-        colors:        form.colorEnabled
+        colorEnabled:    form.colorEnabled,
+        colors:          form.colorEnabled
           ? form.colors.map(c => ({ ...c, color: c.color.trim() }))
           : [],
       };
@@ -377,6 +395,11 @@ const AdminProducts = () => {
                       <div style={{ fontWeight:600, fontSize:'0.9rem' }}>
                         ₹{(Number(p.price) || 0).toLocaleString('en-IN')}
                       </div>
+                      {p.discountEnabled && Number(p.discountPercent) > 0 && (
+                        <div style={{ fontSize:'0.72rem', color:'#c0392b', marginTop:2 }}>
+                          {p.discountPercent}% off (customers only)
+                        </div>
+                      )}
                       {Number(p.resellerPrice) > 0 && (
                         <div style={{ fontSize:'0.72rem', color:'#2e7d32', marginTop:2 }}>
                           Reseller: ₹{Number(p.resellerPrice).toLocaleString('en-IN')}
@@ -542,8 +565,39 @@ const AdminProducts = () => {
                   placeholder="e.g. 3500" min="0" style={{ ...inputStyle, maxWidth:320, background:'#fff' }} />
                 <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#166534' }}>
                   Verified resellers will see this price instead of the customer price when logged in.
-                  {form.sizeEnabled ? ' ⚠ Any size with its own Reseller Rate below ignores this.' : ''}
+                  Resellers never receive a discount, regardless of the Discount setting below.
+                  {form.sizeEnabled ? ' Any size with its own Reseller Rate below ignores this.' : ''}
                 </p>
+              </div>
+
+              {/* Discount — product-level default, customers only */}
+              <div style={{ marginBottom:'1.25rem', padding:'1rem', background:'#fff5f5', border:'1px solid #ffd6d6', borderRadius:8 }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom: form.discountEnabled ? '0.85rem' : 0 }}>
+                  <label style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer', userSelect:'none' }}>
+                    <div onClick={handleToggleDiscountEnabled}
+                      style={{ width:44, height:24, borderRadius:12, cursor:'pointer', background: form.discountEnabled ? '#c0392b' : '#ddd', position:'relative', transition:'background 0.2s', flexShrink:0 }}>
+                      <div style={{ position:'absolute', top:2, left: form.discountEnabled ? 22 : 2, width:20, height:20, borderRadius:'50%', background:'#fff', transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)' }} />
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:'0.9rem', color:'#c0392b' }}>Discount this product</div>
+                      <div style={{ fontSize:'0.77rem', color:'#aaa' }}>
+                        Customers only — resellers always pay full/reseller price, never discounted
+                      </div>
+                    </div>
+                  </label>
+                </div>
+                {form.discountEnabled && (
+                  <div>
+                    <label style={{ ...labelStyle, color:'#c0392b' }}>Discount % (product default)</label>
+                    <input name="discountPercent" type="number" value={form.discountPercent} onChange={handleChange}
+                      placeholder="e.g. 15" min="0" max="100" style={{ ...inputStyle, maxWidth:160, background:'#fff' }} />
+                    <p style={{ margin:'6px 0 0', fontSize:'0.75rem', color:'#aaa' }}>
+                      {form.sizeEnabled
+                        ? 'Applies to every size below unless a size sets its own Discount override.'
+                        : ''}
+                    </p>
+                  </div>
+                )}
               </div>
 
               {/* SKU + Stock */}
@@ -647,6 +701,8 @@ const AdminProducts = () => {
                       onChange={(nextSizeStock) => setForm(prev => ({ ...prev, sizeStock: nextSizeStock }))}
                       basePrice={Number(form.price) || 0}
                       baseResellerPrice={Number(form.resellerPrice) || 0}
+                      baseDiscountEnabled={form.discountEnabled}
+                      baseDiscountPercent={Number(form.discountPercent) || 0}
                       onUploadingChange={setSizeImagesUploading}
                       onError={setFormError}
                     />
