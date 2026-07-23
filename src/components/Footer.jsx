@@ -24,7 +24,7 @@ const Footer = () => {
   <a href="https://www.facebook.com/share/18VUQvxGWN/" target="_blank" rel="noopener noreferrer" aria-label="Facebook">
     <i className="fab fa-facebook"></i>
   </a>
-  <a href="https://wa.me/message/5DPIE5HXKGFDP1" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
+  <a href="https://wa.me/message/JQP6C6WXSXCTP1" target="_blank" rel="noopener noreferrer" aria-label="WhatsApp">
     <i className="fab fa-whatsapp"></i>
   </a>
 </div>
@@ -57,7 +57,7 @@ const Footer = () => {
               <strong>Email:</strong> <a href="mailto:shreecollection3006@gmail.com">shreecollection3006@gmail.com</a>
             </li>
             <li>
-              <strong>Phone:</strong> <a href="tel:+91 93264 27627">+91 93264 27627</a>
+              <strong>Phone:</strong> <a href="tel:+91 9702730069">+91 9702730069</a>
             </li>
             <li>
               <strong>Address:</strong> Shree Collection, India
