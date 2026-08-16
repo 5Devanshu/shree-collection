@@ -62,6 +62,7 @@ const AdminProducts = () => {
   const [saving,           setSaving]           = useState(false);
   const [imageUploading,   setImageUploading]   = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
+  const [total, setTotal] = useState(0);
 
   // True whenever any colour-variant image (in any size) is mid-upload —
   // reported bottom-up by SizeManager. Used to block Save.
@@ -73,17 +74,21 @@ const AdminProducts = () => {
 
   const [imagePreview, setImagePreview] = useState('');
 
-  const loadData = useCallback(async () => {
+const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [prodRes, catRes] = await Promise.all([
-        fetchProducts({ limit: 100 }),
+        fetchProducts({ limit: 1000 }),   // high enough to never silently truncate
         fetchCategories(),
       ]);
       const prods = prodRes.data?.products || prodRes.data?.data || [];
       const cats  = catRes.data?.data || catRes.data?.categories || catRes.data || [];
+      const apiTotal = prodRes.data?.total;
       setProducts(Array.isArray(prods) ? prods : []);
       setCategories(Array.isArray(cats) ? cats : []);
+      // Fall back to prods.length only if the API didn't send a total —
+      // never trust array length as the source of truth once it's capped.
+      setTotal(typeof apiTotal === 'number' ? apiTotal : prods.length);
     } catch {
       setError('Failed to load products.');
     } finally {
@@ -335,8 +340,8 @@ const AdminProducts = () => {
         <div>
           <h2 className="headline-md">Products</h2>
           <p className="body-md" style={{ color:'var(--on-surface-variant)', marginTop:4 }}>
-            {products.length} product{products.length !== 1 ? 's' : ''}
-          </p>
+  {total} product{total !== 1 ? 's' : ''}
+</p>
         </div>
         <button onClick={openAdd} style={{
           background:'#735c00', color:'#fff', border:'none', borderRadius:6,
