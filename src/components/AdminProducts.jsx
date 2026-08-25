@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   fetchProducts, fetchCategories, createProduct,
   updateProduct, deleteProduct, uploadImage,
@@ -28,6 +28,18 @@ const EMPTY_FORM = {
   colors: [],
 };
 
+// ── Filters — kept separate from EMPTY_FORM (that's the Add/Edit product
+// form state, this is the table's search/filter bar state) ──────────────────
+const EMPTY_FILTERS = {
+  search:      '',
+  category:    '',
+  stockStatus: '',
+  minPrice:    '',
+  maxPrice:    '',
+};
+
+const PAGE_SIZE = 20;
+
 const labelStyle = {
   display: 'block', fontSize: '0.75rem', fontWeight: 700,
   letterSpacing: '0.06em', textTransform: 'uppercase',
@@ -38,6 +50,14 @@ const inputStyle = {
   border: '1px solid #e0d5c5', borderRadius: 6,
   fontFamily: 'inherit', fontSize: '0.9rem',
   background: '#faf7f2', outline: 'none', boxSizing: 'border-box',
+};
+
+// Slightly smaller variant of inputStyle for the filter bar, so it doesn't
+// tower over the search box.
+const filterInputStyle = {
+  ...inputStyle,
+  padding: '0.55rem 0.75rem',
+  fontSize: '0.85rem',
 };
 
 const generateSku = (categoryName, existingProducts) => {
@@ -64,6 +84,18 @@ const AdminProducts = () => {
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [total, setTotal] = useState(0);
 
+  // ── Filters + pagination ────────────────────────────────────────────────
+  // searchInput is what the user is typing right now (updates instantly so
+  // the box feels responsive); appliedFilters is what's actually sent to the
+  // API, updated after a short debounce so we're not hitting the backend on
+  // every keystroke. Category/price/stock changes apply immediately since
+  // those are discrete selections, not free typing.
+  const [searchInput, setSearchInput]         = useState('');
+  const [appliedFilters, setAppliedFilters]   = useState(EMPTY_FILTERS);
+  const [page, setPage]                       = useState(1);
+  const [totalPages, setTotalPages]           = useState(1);
+  const debounceRef = useRef(null);
+
   // True whenever any colour-variant image (in any size) is mid-upload —
   // reported bottom-up by SizeManager. Used to block Save.
   const [sizeImagesUploading, setSizeImagesUploading] = useState(false);
@@ -74,29 +106,70 @@ const AdminProducts = () => {
 
   const [imagePreview, setImagePreview] = useState('');
 
-const loadData = useCallback(async () => {
+  // ── Debounce the search box → appliedFilters.search ─────────────────────
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setAppliedFilters(prev => ({ ...prev, search: searchInput.trim() }));
+      setPage(1);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [searchInput]);
+
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      const params = { page, limit: PAGE_SIZE };
+      if (appliedFilters.search)      params.search      = appliedFilters.search;
+      if (appliedFilters.category)    params.category    = appliedFilters.category;
+      if (appliedFilters.stockStatus) params.stockStatus = appliedFilters.stockStatus;
+      if (appliedFilters.minPrice)    params.minPrice    = appliedFilters.minPrice;
+      if (appliedFilters.maxPrice)    params.maxPrice    = appliedFilters.maxPrice;
+
       const [prodRes, catRes] = await Promise.all([
-        fetchProducts({ limit: 1000 }),   // high enough to never silently truncate
+        fetchProducts(params),
+        // Categories don't need to be re-fetched on every filter change —
+        // but fetching them alongside is cheap and keeps this effect simple,
+        // and the dropdown stays fresh if a category gets added/renamed
+        // elsewhere while this page is open.
         fetchCategories(),
       ]);
       const prods = prodRes.data?.products || prodRes.data?.data || [];
       const cats  = catRes.data?.data || catRes.data?.categories || catRes.data || [];
       const apiTotal = prodRes.data?.total;
+
       setProducts(Array.isArray(prods) ? prods : []);
       setCategories(Array.isArray(cats) ? cats : []);
       // Fall back to prods.length only if the API didn't send a total —
       // never trust array length as the source of truth once it's capped.
-      setTotal(typeof apiTotal === 'number' ? apiTotal : prods.length);
+      const resolvedTotal = typeof apiTotal === 'number' ? apiTotal : prods.length;
+      setTotal(resolvedTotal);
+      setTotalPages(Math.max(1, Math.ceil(resolvedTotal / PAGE_SIZE)));
     } catch {
       setError('Failed to load products.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [page, appliedFilters]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // ── Filter bar handlers ─────────────────────────────────────────────────
+  const handleFilterChange = (field, value) => {
+    setAppliedFilters(prev => ({ ...prev, [field]: value }));
+    setPage(1);
+  };
+
+  const handleClearFilters = () => {
+    setSearchInput('');
+    setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
+  };
+
+  const hasActiveFilters = Boolean(
+    appliedFilters.search || appliedFilters.category ||
+    appliedFilters.stockStatus || appliedFilters.minPrice || appliedFilters.maxPrice
+  );
 
   const openAdd = () => {
     setForm(EMPTY_FORM); setEditingId(null);
@@ -313,7 +386,9 @@ const loadData = useCallback(async () => {
     if (!window.confirm(`Delete "${title}"? This cannot be undone.`)) return;
     try {
       await deleteProduct(id);
-      setProducts(prev => prev.filter(p => p.id !== id));
+      // Refetch rather than just filtering out of local state — deleting the
+      // last item on a page should pull the count/pagination back in line.
+      await loadData();
     } catch (err) {
       alert(err?.response?.data?.message || 'Delete failed.');
     }
@@ -336,18 +411,97 @@ const loadData = useCallback(async () => {
     <div className="admin-content">
 
       {/* ── Header ── */}
-      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'2rem' }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1.5rem' }}>
         <div>
           <h2 className="headline-md">Products</h2>
           <p className="body-md" style={{ color:'var(--on-surface-variant)', marginTop:4 }}>
-  {total} product{total !== 1 ? 's' : ''}
-</p>
+            {total} product{total !== 1 ? 's' : ''}{hasActiveFilters ? ' (filtered)' : ''}
+          </p>
         </div>
         <button onClick={openAdd} style={{
           background:'#735c00', color:'#fff', border:'none', borderRadius:6,
           padding:'0.65rem 1.4rem', fontFamily:'inherit', fontSize:'0.9rem',
           fontWeight:600, cursor:'pointer',
         }}>+ Add Product</button>
+      </div>
+
+      {/* ── Search + Filter bar ── */}
+      <div style={{
+        display:'flex', flexWrap:'wrap', alignItems:'flex-end', gap:'0.85rem',
+        background:'#fff', border:'1px solid #e8e0d5', borderRadius:8,
+        padding:'1rem 1.25rem', marginBottom:'1.5rem',
+      }}>
+        <div style={{ flex:'2 1 220px', minWidth:180 }}>
+          <label style={labelStyle}>Search</label>
+          <input
+            type="text"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder="Search by product name…"
+            style={filterInputStyle}
+          />
+        </div>
+
+        <div style={{ flex:'1 1 160px', minWidth:150 }}>
+          <label style={labelStyle}>Category</label>
+          <select
+            value={appliedFilters.category}
+            onChange={(e) => handleFilterChange('category', e.target.value)}
+            style={filterInputStyle}
+          >
+            <option value="">All categories</option>
+            {categories.map(c => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        </div>
+
+        <div style={{ flex:'1 1 150px', minWidth:140 }}>
+          <label style={labelStyle}>Stock Status</label>
+          <select
+            value={appliedFilters.stockStatus}
+            onChange={(e) => handleFilterChange('stockStatus', e.target.value)}
+            style={filterInputStyle}
+          >
+            <option value="">All stock</option>
+            <option value="in_stock">In Stock</option>
+            <option value="low_stock">Low Stock</option>
+            <option value="out_of_stock">Out of Stock</option>
+          </select>
+        </div>
+
+        <div style={{ flex:'0 1 110px', minWidth:100 }}>
+          <label style={labelStyle}>Min ₹</label>
+          <input
+            type="number" min="0" placeholder="0"
+            value={appliedFilters.minPrice}
+            onChange={(e) => handleFilterChange('minPrice', e.target.value)}
+            style={filterInputStyle}
+          />
+        </div>
+
+        <div style={{ flex:'0 1 110px', minWidth:100 }}>
+          <label style={labelStyle}>Max ₹</label>
+          <input
+            type="number" min="0" placeholder="Any"
+            value={appliedFilters.maxPrice}
+            onChange={(e) => handleFilterChange('maxPrice', e.target.value)}
+            style={filterInputStyle}
+          />
+        </div>
+
+        {hasActiveFilters && (
+          <button
+            onClick={handleClearFilters}
+            style={{
+              background:'#faf7f2', border:'1px solid #ddd', borderRadius:6,
+              padding:'0.55rem 1rem', cursor:'pointer', fontSize:'0.82rem',
+              fontWeight:500, color:'#666', whiteSpace:'nowrap',
+            }}
+          >
+            ✕ Clear filters
+          </button>
+        )}
       </div>
 
       {error && (
@@ -374,7 +528,9 @@ const loadData = useCallback(async () => {
             <tbody>
               {products.length === 0 ? (
                 <tr><td colSpan={8} style={{ padding:'3rem', textAlign:'center', color:'#aaa' }}>
-                  No products yet. Click "+ Add Product" to get started.
+                  {hasActiveFilters
+                    ? 'No products match these filters.'
+                    : 'No products yet. Click "+ Add Product" to get started.'}
                 </td></tr>
               ) : products.map((p, i) => {
                 const badge  = stockBadge(p.stockStatus);
@@ -453,6 +609,36 @@ const loadData = useCallback(async () => {
               })}
             </tbody>
           </table>
+
+          {/* ── Pagination ── */}
+          {totalPages > 1 && (
+            <div style={{
+              display:'flex', gap:'0.75rem', justifyContent:'center', alignItems:'center',
+              padding:'1rem', borderTop:'1px solid #f0ebe3',
+            }}>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                style={{
+                  background:'#faf7f2', border:'1px solid #ddd', borderRadius:6,
+                  padding:'0.45rem 1rem', cursor: page === 1 ? 'not-allowed' : 'pointer',
+                  fontSize:'0.85rem', opacity: page === 1 ? 0.5 : 1,
+                }}
+              >← Prev</button>
+              <span style={{ fontSize:'0.85rem', color:'#666' }}>
+                Page {page} of {totalPages}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                style={{
+                  background:'#faf7f2', border:'1px solid #ddd', borderRadius:6,
+                  padding:'0.45rem 1rem', cursor: page === totalPages ? 'not-allowed' : 'pointer',
+                  fontSize:'0.85rem', opacity: page === totalPages ? 0.5 : 1,
+                }}
+              >Next →</button>
+            </div>
+          )}
         </div>
       )}
 
