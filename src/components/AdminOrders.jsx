@@ -96,6 +96,20 @@ const AdminOrders = () => {
   const getId        = (order) => order.id || order._id;
   const getBuyerType = (order) => (order.resellerId ? 'Reseller' : 'Customer');
 
+  // Builds a "Size 8, Gold" / "Size 8" / "Gold" style label from an order
+  // item snapshot. Returns '' when the item had no size/colour at all, so
+  // callers can skip rendering the line entirely for plain (unsized) products.
+  const getVariantLabel = (item) => {
+    const parts = [];
+    if (item.size !== undefined && item.size !== null && item.size !== '') {
+      parts.push(`Size ${item.size}`);
+    }
+    if (item.color) {
+      parts.push(item.color);
+    }
+    return parts.join(', ');
+  };
+
   return (
     <div className="admin-content">
 
@@ -289,42 +303,51 @@ const AdminOrders = () => {
             )}
 
             <h4 className="label-lg" style={{ marginTop: 'var(--spacing-4)' }}>Items</h4>
-{(selectedOrder.items || []).map((item, i) => (
-  <div key={i} style={{
-    display: 'flex', alignItems: 'center', gap: 12,
-    padding: 'var(--spacing-3) 0',
-    borderBottom: '1px solid var(--surface-container-highest)',
-  }}>
-    {item.image ? (
-      <img
-        src={item.image}
-        alt={item.title}
-        style={{ width: 52, height: 52, objectFit: 'cover',
-          borderRadius: 4, border: '1px solid var(--surface-container-highest)',
-          flexShrink: 0 }}
-        onError={e => { e.target.style.display = 'none'; }}
-      />
-    ) : (
-      <div style={{ width: 52, height: 52, borderRadius: 4, flexShrink: 0,
-        background: 'var(--surface-container-low)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: '1.2rem' }}>💎</div>
-    )}
-    <div style={{ flex: 1 }}>
-      <p className="body-md" style={{ margin: 0, fontWeight: 500 }}>{item.title}</p>
-      {item.material && (
-        <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--on-surface-variant)',
-          textTransform: 'uppercase', letterSpacing: '0.08em' }}>{item.material}</p>
+{(selectedOrder.items || []).map((item, i) => {
+  const variantLabel = getVariantLabel(item);
+  return (
+    <div key={i} style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: 'var(--spacing-3) 0',
+      borderBottom: '1px solid var(--surface-container-highest)',
+    }}>
+      {item.image ? (
+        <img
+          src={item.image}
+          alt={item.title}
+          style={{ width: 52, height: 52, objectFit: 'cover',
+            borderRadius: 4, border: '1px solid var(--surface-container-highest)',
+            flexShrink: 0 }}
+          onError={e => { e.target.style.display = 'none'; }}
+        />
+      ) : (
+        <div style={{ width: 52, height: 52, borderRadius: 4, flexShrink: 0,
+          background: 'var(--surface-container-low)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '1.2rem' }}>💎</div>
       )}
-      <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>
-        Qty: {item.quantity}
-      </p>
+      <div style={{ flex: 1 }}>
+        <p className="body-md" style={{ margin: 0, fontWeight: 500 }}>{item.title}</p>
+        {item.material && (
+          <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--on-surface-variant)',
+            textTransform: 'uppercase', letterSpacing: '0.08em' }}>{item.material}</p>
+        )}
+        {variantLabel && (
+          <p style={{ margin: '2px 0 0', fontSize: '0.8rem', fontWeight: 600,
+            color: 'var(--on-surface)' }}>
+            {variantLabel}
+          </p>
+        )}
+        <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--on-surface-variant)' }}>
+          Qty: {item.quantity}
+        </p>
+      </div>
+      <span className="body-md" style={{ fontWeight: 500, flexShrink: 0 }}>
+        ₹{(item.price * item.quantity).toLocaleString('en-IN')}
+      </span>
     </div>
-    <span className="body-md" style={{ fontWeight: 500, flexShrink: 0 }}>
-      ₹{(item.price * item.quantity).toLocaleString('en-IN')}
-    </span>
-  </div>
-))}
+  );
+})}
 
             <div style={{ marginTop: 'var(--spacing-4)', textAlign: 'right' }}>
               <p className="body-md">Subtotal: ₹{Number(selectedOrder.subtotal || 0).toLocaleString('en-IN')}</p>
