@@ -437,7 +437,7 @@ const AdminProducts = () => {
             type="text"
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
-            placeholder="Search by product name…"
+            placeholder="Search by product name or SKU…"
             style={filterInputStyle}
           />
         </div>
