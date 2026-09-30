@@ -182,7 +182,7 @@ const AdminProducts = () => {
   const openEdit = (p) => {
     const sizeStock = Array.isArray(p.sizeStock) && p.sizeStock.length > 0
       ? p.sizeStock.map(s => ({
-          size:            Number(s.size),
+          size:            String(s.size),
           stock:           Number(s.stock) || 0,
           price:           Number(s.price) || 0,
           resellerPrice:   Number(s.resellerPrice) || 0,
@@ -199,7 +199,7 @@ const AdminProducts = () => {
         }))
       : Array.isArray(p.sizes)
         ? p.sizes.map(s => ({
-            size: Number(s), stock: 0, price: 0, resellerPrice: 0,
+            size: String(s), stock: 0, price: 0, resellerPrice: 0,
             discountEnabled: null, discountPercent: 0, colors: [],
           }))
         : [];

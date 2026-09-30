@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import ColorManager from './ColorManager';
+import { normalizeSize, sizesEqual, compareSizes } from '../utils/size';
 
 const labelStyle = {
   display: 'block', fontSize: '0.75rem', fontWeight: 700,
@@ -74,12 +75,12 @@ export default function SizeManager({
     const raw = newSizeValue.trim();
     if (raw === '') return;
 
-    const value = Number(raw);
-    if (!Number.isFinite(value)) {
-      reportError('Size must be a number (e.g. 2.4, 2.6, 7).');
+    const value = normalizeSize(raw);
+    if (value === null) {
+      reportError('Size must be a number (e.g. 2.4, 2.10, 7).');
       return;
     }
-    if (sizeStock.some(s => s.size === value)) {
+    if (sizeStock.some(s => sizesEqual(s.size, value))) {
       reportError(`Size ${value} has already been added.`);
       return;
     }
@@ -96,7 +97,7 @@ export default function SizeManager({
         discountPercent: 0,
         colors: [],
       },
-    ].sort((a, b) => a.size - b.size);
+    ].sort((a, b) => compareSizes(a.size, b.size));
     onChange(next);
     setNewSizeValue('');
   };
@@ -169,11 +170,10 @@ export default function SizeManager({
         <label style={labelStyle}>Add Size</label>
         <div style={{ display: 'flex', gap: 8 }}>
           <input
-            type="number"
-            step="any"
+            type="text"
             inputMode="decimal"
             value={newSizeValue}
-            onChange={(e) => setNewSizeValue(e.target.value)}
+            onChange={(e) => setNewSizeValue(e.target.value.replace(/[^0-9.]/g, ''))}
             onKeyDown={handleNewSizeKeyDown}
             placeholder="e.g. 2.4 or 8"
             style={{ ...inputStyle, maxWidth: 160 }}

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import client from '../api/client';
+import { sizesEqual } from '../utils/size';
 
 // ── Helpers — resolve category slug from product ──────────────────────────────
 const getProductCategorySlug = (p) => p.categorySlug || p.category?.slug || '';
@@ -37,7 +38,7 @@ const removeCategoryDiscount = async (slug, products) => {
 const setSizeDiscount = async (product, size, { discountEnabled, discountPercent }) => {
   const id = product.id || product._id;
   const nextSizeStock = (product.sizeStock || []).map(s =>
-    Number(s.size) === Number(size)
+    sizesEqual(s.size, size)
       ? { ...s, discountEnabled, discountPercent: Number(discountPercent) || 0 }
       : s
   );

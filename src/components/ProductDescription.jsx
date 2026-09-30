@@ -5,6 +5,7 @@ import { fetchProductById }  from '../api/client';
 import NotifyMe              from './NotifyMe';
 import './ProductDescription.css';
 import ProductReviews from './ProductReviews';
+import { sizesEqual } from '../utils/size';
 
 // Sizes are stored as plain numbers (e.g. 2.4, 2.6, 7, 8.5) with no unit.
 // Shree Collection sizes them all in inches, so every customer-facing
@@ -119,7 +120,7 @@ const ProductDescription = () => {
 
   const getSizeEntry = (size) => {
     if (!hasSizeStock || size === null || size === undefined) return null;
-    return product.sizeStock.find(s => Number(s.size) === Number(size)) || null;
+    return product.sizeStock.find(s => sizesEqual(s.size, size)) || null;
   };
 
   const selectedSizeEntry = getSizeEntry(selectedSize);
