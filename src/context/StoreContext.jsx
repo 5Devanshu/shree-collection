@@ -113,15 +113,40 @@ export const StoreProvider = ({ children }) => {
   const [loadingProds, setLoadingProds] = useState(true);
   const [loadingCats,  setLoadingCats]  = useState(true);
 
-  const loadProducts = useCallback(() => {
+  const loadProducts = useCallback(async () => {
     setLoadingProds(true);
-    apiClient.get('/products', { params: { limit: 200 } })
-      .then(res => {
-        const data = res.data?.products || res.data?.data || res.data || [];
-        setProducts(Array.isArray(data) ? data : []);
-      })
-      .catch(() => setProducts([]))
-      .finally(() => setLoadingProds(false));
+    const PAGE_SIZE = 100;
+
+    const extract = (res) => {
+      const data = res.data?.products || res.data?.data || res.data || [];
+      return Array.isArray(data) ? data : [];
+    };
+
+    try {
+      const first = await apiClient.get('/products', { params: { page: 1, limit: PAGE_SIZE } });
+      let all = extract(first);
+      const total = Number(first.data?.total) || all.length;
+      const totalPages = Math.ceil(total / PAGE_SIZE);
+
+      if (totalPages > 1) {
+        const rest = await Promise.all(
+          Array.from({ length: totalPages - 1 }, (_, i) =>
+            apiClient.get('/products', { params: { page: i + 2, limit: PAGE_SIZE } })
+          )
+        );
+        rest.forEach(res => { all = all.concat(extract(res)); });
+      }
+
+      // Dedupe by id in case a product is added between page requests
+      const seen = new Set();
+      all = all.filter(p => (seen.has(p.id) ? false : seen.add(p.id)));
+
+      setProducts(all);
+    } catch {
+      setProducts([]);
+    } finally {
+      setLoadingProds(false);
+    }
   }, []);
 
   const loadCategories = useCallback(() => {
