@@ -12,6 +12,26 @@
     linear-gradient(105deg, #f5e6a3 0%, var(--primary-container) 52%, #c89a25 100%);
   border-bottom: 1px solid rgba(115, 92, 0, 0.25);
   box-shadow: 0 3px 14px rgba(115, 92, 0, 0.12);
+  overflow: hidden;
+}
+
+.shipping-marquee {
+  width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.shipping-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: shipping-marquee-scroll 32s linear infinite;
+}
+
+.shipping-marquee-copy {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding-right: 3.5rem;
 }
 
 .shipping-banner-content {
@@ -60,13 +80,41 @@
   font-weight: 800;
 }
 
+.shipping-banner-message {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-style: italic;
+  letter-spacing: 0.02em;
+}
+
 .shipping-banner-sparkle {
-  margin-left: 0.25rem;
   font-size: 1rem;
   opacity: 0.7;
 }
 
+@keyframes shipping-marquee-scroll {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shipping-marquee-track {
+    animation: none;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .shipping-marquee-copy:last-child {
+    display: none;
+  }
+}
+
 @media (max-width: 480px) {
+  .shipping-marquee-copy {
+    gap: 0.45rem;
+    padding-right: 2rem;
+  }
+
   .shipping-banner-content {
     gap: 0.45rem;
     font-size: 0.68rem;
@@ -85,5 +133,9 @@
 
   .shipping-banner-copy strong {
     font-size: 0.82rem;
+  }
+
+  .shipping-banner-message {
+    font-size: 0.78rem;
   }
 }
