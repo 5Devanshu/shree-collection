@@ -1,4 +1,6 @@
 :root {
+  --announcement-height: 44px;
+
   /* Core Colors */
   --primary: #735c00;
   --primary-container: #d4af37;
@@ -52,6 +54,10 @@ body {
   color: var(--on-surface);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+}
+
+.app {
+  padding-top: var(--announcement-height);
 }
 
 h1, h2, h3, h4, h5, h6 {

@@ -1,0 +1,89 @@
+.shipping-banner {
+  position: fixed;
+  inset: 0 0 auto;
+  height: var(--announcement-height);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--on-primary-container);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 255, 255, 0.3), transparent 28%),
+    linear-gradient(105deg, #f5e6a3 0%, var(--primary-container) 52%, #c89a25 100%);
+  border-bottom: 1px solid rgba(115, 92, 0, 0.25);
+  box-shadow: 0 3px 14px rgba(115, 92, 0, 0.12);
+}
+
+.shipping-banner-content {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-height: 100%;
+  font-size: 0.78rem;
+  letter-spacing: 0.05em;
+}
+
+.shipping-banner-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.65rem;
+  height: 1.65rem;
+  color: var(--on-primary-container);
+  border: 1px solid rgba(36, 26, 0, 0.35);
+  border-radius: 50%;
+}
+
+.shipping-banner-icon svg {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+}
+
+.shipping-banner-copy {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.shipping-banner-copy strong {
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.shipping-banner-copy b {
+  font-weight: 800;
+}
+
+.shipping-banner-sparkle {
+  margin-left: 0.25rem;
+  font-size: 1rem;
+  opacity: 0.7;
+}
+
+@media (max-width: 480px) {
+  .shipping-banner-content {
+    gap: 0.45rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.03em;
+  }
+
+  .shipping-banner-icon {
+    width: 1.4rem;
+    height: 1.4rem;
+  }
+
+  .shipping-banner-icon svg {
+    width: 0.85rem;
+    height: 0.85rem;
+  }
+
+  .shipping-banner-copy strong {
+    font-size: 0.82rem;
+  }
+}

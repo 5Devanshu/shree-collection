@@ -18,6 +18,7 @@ import CheckoutCallback   from './components/CheckoutCallback';
 import ResellerProfile    from './components/ResellerProfile';
 import SearchPage         from './components/SearchPage';   // ← NEW
 import SessionExpiredBanner from './components/SessionExpiredBanner'; // ← NEW
+import ShippingBanner     from './components/ShippingBanner';
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -49,6 +50,7 @@ function AppRoutes() {
           in api/client.js. Needs to sit inside <Router> because it calls
           useNavigate() to send the person to the right login screen. */}
       <SessionExpiredBanner />
+      <ShippingBanner />
       <Navbar />
       <Routes>
         {/* ── Public storefront ──────────────────────────────────────── */}
