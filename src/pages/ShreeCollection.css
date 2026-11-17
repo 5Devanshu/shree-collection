@@ -193,6 +193,25 @@
   font-weight: 700;
 }
 
+.sc-link-icon svg {
+  width: 23px;
+  height: 23px;
+  display: block;
+  fill: currentColor;
+}
+
+.sc-link-icon svg rect,
+.sc-link-icon svg circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+}
+
+.sc-link-icon svg .sc-icon-fill {
+  fill: currentColor;
+  stroke: none;
+}
+
 .sc-link-instagram .sc-link-icon { color: #a45a55; }
 .sc-link-facebook .sc-link-icon { color: #4267a9; }
 .sc-link-google .sc-link-icon { color: #c09235; }
