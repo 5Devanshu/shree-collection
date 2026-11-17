@@ -95,9 +95,9 @@ export default function ShreeCollection() {
   const handlePayment = () => {
     const params = new URLSearchParams({
       pa: 'shreecollection3006@oksbi',
-      pn: 'Shree Collection',
+      pn: 'AARYA YOGRAJ RAJUPURKAR',
       cu: 'INR',
-      tn: 'Payment to Shree Collection',
+      tn: 'Shree Collection',
     });
 
     window.location.href = `upi://pay?${params.toString()}`;
