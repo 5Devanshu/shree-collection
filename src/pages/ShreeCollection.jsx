@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import './ShreeCollection.css';
 
 const InstagramIcon = () => (
@@ -46,6 +47,16 @@ const GooglePayIcon = () => (
   </svg>
 );
 
+const BUSINESS_UPI_ID = 'shreecollection3006@oksbi';
+const BUSINESS_NAME = 'AARYA YOGRAJ RAJUPURKAR';
+const paymentParams = new URLSearchParams({
+  pa: BUSINESS_UPI_ID,
+  pn: BUSINESS_NAME,
+  cu: 'INR',
+  tn: 'Shree Collection',
+});
+const upiLink = `upi://pay?${paymentParams.toString()}`;
+
 const businessLinks = [
   {
     id: 'website',
@@ -92,15 +103,24 @@ const businessLinks = [
 ];
 
 export default function ShreeCollection() {
-  const handlePayment = () => {
-    const params = new URLSearchParams({
-      pa: 'shreecollection3006@oksbi',
-      pn: 'AARYA YOGRAJ RAJUPURKAR',
-      cu: 'INR',
-      tn: 'Shree Collection',
-    });
+  const [showPaymentQR, setShowPaymentQR] = useState(false);
 
-    window.location.href = `upi://pay?${params.toString()}`;
+  const handlePayment = () => {
+    if (/Android/i.test(navigator.userAgent)) {
+      window.location.href = upiLink;
+    } else {
+      setShowPaymentQR(true);
+    }
+  };
+
+  const copyUPI = async () => {
+    try {
+      await navigator.clipboard.writeText(BUSINESS_UPI_ID);
+      window.alert('UPI ID copied successfully!');
+    } catch (error) {
+      console.error('Unable to copy UPI ID:', error);
+      window.prompt('Copy the UPI ID:', BUSINESS_UPI_ID);
+    }
   };
 
   const handleShare = async () => {
@@ -176,10 +196,30 @@ export default function ShreeCollection() {
           </div>
         </section>
 
-        <button className="sc-pay-button" onClick={handlePayment} type="button">
-          <GooglePayIcon />
-          <span>PAY NOW</span>
-        </button>
+        <section className="sc-payment-section">
+          <div className="sc-payment-heading">
+            <span>✦</span>
+            <h2>MAKE A PAYMENT</h2>
+            <span>✦</span>
+          </div>
+          <p className="sc-payment-description">Pay directly to Shree Collection using UPI.</p>
+          <button className="sc-pay-button" onClick={handlePayment} type="button">
+            <GooglePayIcon />
+            <span>PAY NOW</span>
+          </button>
+          <div className="sc-payment-divider">OR SCAN TO PAY</div>
+          <div className="sc-payment-qr">
+            <QRCodeSVG value={upiLink} size={210} level="H" includeMargin bgColor="#FFFFFF" fgColor="#49351C" />
+            <p>SHREE COLLECTION</p>
+            <span>UPI ID: {BUSINESS_UPI_ID}</span>
+            <button className="sc-copy-upi" onClick={copyUPI} type="button">COPY UPI ID</button>
+          </div>
+          {showPaymentQR && (
+            <p className="sc-payment-note">
+              Scan the QR code using another phone with Google Pay, PhonePe or another UPI app.
+            </p>
+          )}
+        </section>
 
         <button className="sc-share-button" onClick={handleShare} type="button">
           <span>↗</span>

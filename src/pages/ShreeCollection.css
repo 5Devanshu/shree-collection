@@ -267,14 +267,13 @@
 
 .sc-pay-button {
   width: 100%;
-  margin-top: 24px;
-  padding: 15px;
-  border: 1px solid #2d7a4b;
+  padding: 16px;
+  border: none;
   border-radius: 10px;
-  background: linear-gradient(135deg, #3da565, #20713f);
+  background: linear-gradient(135deg, #c49a50, #896124);
   color: white;
   font-family: 'DM Sans', sans-serif;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 2px;
   cursor: pointer;
@@ -293,13 +292,90 @@
 }
 
 .sc-pay-button:hover {
-  background: #1b6338;
-  box-shadow: 0 6px 18px rgba(45, 122, 75, 0.22);
+  background: #805a27;
+  box-shadow: 0 6px 18px rgba(145, 108, 48, 0.2);
 }
 
 .sc-pay-button:focus-visible {
-  outline: 2px solid #1b6338;
+  outline: 2px solid var(--sc-dark-gold);
   outline-offset: 3px;
+}
+
+.sc-payment-section {
+  margin-top: 30px;
+  padding: 22px 15px;
+  background: #fbf8f1;
+  border: 1px solid #e8d5ac;
+  border-radius: 14px;
+  text-align: center;
+}
+
+.sc-payment-heading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  color: #b68a3b;
+}
+
+.sc-payment-heading h2 {
+  font-family: 'DM Sans', sans-serif;
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #896124;
+}
+
+.sc-payment-description {
+  font-size: 11px;
+  color: #92836c;
+  margin-bottom: 18px;
+}
+
+.sc-payment-divider {
+  margin: 22px 0 15px;
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: #896124;
+}
+
+.sc-payment-qr {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.sc-payment-qr p {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #76552c;
+  margin: 5px 0 0;
+}
+
+.sc-payment-qr > span {
+  font-size: 11px;
+  color: #92836c;
+  overflow-wrap: anywhere;
+}
+
+.sc-copy-upi {
+  padding: 9px 20px;
+  border: 1px solid #b68a3b;
+  border-radius: 7px;
+  background: white;
+  color: #896124;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+}
+
+.sc-payment-note {
+  font-size: 11px;
+  color: #896124;
+  line-height: 1.6;
+  margin-top: 15px;
 }
 
 .sc-share-button:hover {
