@@ -82,6 +82,17 @@ const businessLinks = [
 ];
 
 export default function ShreeCollection() {
+  const handlePayment = () => {
+    const params = new URLSearchParams({
+      pa: 'shreecollection3006@oksbi',
+      pn: 'Shree Collection',
+      cu: 'INR',
+      tn: 'Payment to Shree Collection',
+    });
+
+    window.location.href = `upi://pay?${params.toString()}`;
+  };
+
   const handleShare = async () => {
     const shareData = {
       title: 'Shree Collection by Aarya',
@@ -154,6 +165,10 @@ export default function ShreeCollection() {
             ))}
           </div>
         </section>
+
+        <button className="sc-pay-button" onClick={handlePayment} type="button">
+          ₹ PAY NOW
+        </button>
 
         <button className="sc-share-button" onClick={handleShare} type="button">
           <span>↗</span>

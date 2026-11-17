@@ -265,6 +265,32 @@
   transition: 0.25s ease;
 }
 
+.sc-pay-button {
+  width: 100%;
+  margin-top: 24px;
+  padding: 15px;
+  border: 1px solid #2d7a4b;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #3da565, #20713f);
+  color: white;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  cursor: pointer;
+  transition: 0.25s ease;
+}
+
+.sc-pay-button:hover {
+  background: #1b6338;
+  box-shadow: 0 6px 18px rgba(45, 122, 75, 0.22);
+}
+
+.sc-pay-button:focus-visible {
+  outline: 2px solid #1b6338;
+  outline-offset: 3px;
+}
+
 .sc-share-button:hover {
   background: #805a27;
   box-shadow: 0 6px 18px rgba(145, 108, 48, 0.2);
