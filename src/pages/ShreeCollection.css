@@ -281,6 +281,17 @@
   transition: 0.25s ease;
 }
 
+.sc-pay-icon {
+  width: 58px;
+  height: 24px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+.sc-pay-button span {
+  vertical-align: middle;
+}
+
 .sc-pay-button:hover {
   background: #1b6338;
   box-shadow: 0 6px 18px rgba(45, 122, 75, 0.22);

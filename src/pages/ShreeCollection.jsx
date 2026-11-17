@@ -36,6 +36,16 @@ const YouTubeIcon = () => (
   </svg>
 );
 
+const GooglePayIcon = () => (
+  <svg className="sc-pay-icon" viewBox="0 0 64 24" aria-hidden="true">
+    <path fill="#4285f4" d="M21.8 12.2c0-.7-.1-1.5-.2-2.2H12v4.3h5.5a4.7 4.7 0 0 1-2 3.1v2.6h3.3c1.9-1.8 3-4.5 3-7.8Z" />
+    <path fill="#34a853" d="M12 22c2.7 0 5-.9 6.7-2.4l-3.3-2.6c-.9.6-2 .9-3.4.9-2.6 0-4.8-1.8-5.6-4.2H3v2.7A10 10 0 0 0 12 22Z" />
+    <path fill="#fbbc05" d="M6.4 13.7a6 6 0 0 1 0-3.4V7.6H3a10 10 0 0 0 0 8.8l3.4-2.7Z" />
+    <path fill="#ea4335" d="M12 6.1c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3 7.6l3.4 2.7C7.2 7.9 9.4 6.1 12 6.1Z" />
+    <text x="26" y="16.5" fill="currentColor" fontSize="11" fontWeight="600" fontFamily="Arial, sans-serif">Pay</text>
+  </svg>
+);
+
 const businessLinks = [
   {
     id: 'website',
@@ -167,7 +177,8 @@ export default function ShreeCollection() {
         </section>
 
         <button className="sc-pay-button" onClick={handlePayment} type="button">
-          ₹ PAY NOW
+          <GooglePayIcon />
+          <span>PAY NOW</span>
         </button>
 
         <button className="sc-share-button" onClick={handleShare} type="button">
