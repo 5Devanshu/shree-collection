@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { StoreProvider } from './context/StoreContext';
 
 import Navbar             from './components/Navbar';
@@ -19,6 +19,7 @@ import ResellerProfile    from './components/ResellerProfile';
 import SearchPage         from './components/SearchPage';   // ← NEW
 import SessionExpiredBanner from './components/SessionExpiredBanner'; // ← NEW
 import ShippingBanner     from './components/ShippingBanner';
+import ShreeCollection   from './pages/ShreeCollection';
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -43,6 +44,17 @@ const GuestRoute = ({ children }) => {
 };
 
 function AppRoutes() {
+  const location = useLocation();
+  const isSharePage = location.pathname === '/s/shree-collection';
+
+  if (isSharePage) {
+    return (
+      <Routes>
+        <Route path="/s/shree-collection" element={<ShreeCollection />} />
+      </Routes>
+    );
+  }
+
   return (
     <div className="app">
       {/* Mounted once, above everything — reacts to a 401 from ANY axios
@@ -61,6 +73,7 @@ function AppRoutes() {
         <Route path="/checkout/callback"     element={<CheckoutCallback />} />
         <Route path="/terms"                 element={<TermsAndConditions />} />
         <Route path="/search"                element={<SearchPage />} />  {/* ← NEW */}
+        <Route path="/s/shree-collection"   element={<ShreeCollection />} />
 
         {/* ── Auth ───────────────────────────────────────────────────── */}
         <Route path="/login" element={<GuestRoute><Login /></GuestRoute>} />
