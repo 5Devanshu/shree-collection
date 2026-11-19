@@ -47,7 +47,7 @@ const GooglePayIcon = () => (
   </svg>
 );
 
-const BUSINESS_UPI_ID = 'shreecollection3006@oksbi';
+const BUSINESS_UPI_ID = '8928007338-2@okbizaxis';
 const upiLink =
   `upi://pay?pa=${encodeURIComponent(BUSINESS_UPI_ID)}&cu=INR`;
 
