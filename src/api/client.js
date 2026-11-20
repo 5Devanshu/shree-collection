@@ -226,6 +226,14 @@ export const createCustomPayment = (data) =>
   client.post('/payments/phonepe/create', data);
 export const checkCustomPaymentStatus = (merchantOrderId) =>
   client.get(`/payments/phonepe/status/${encodeURIComponent(merchantOrderId)}`);
+export const fetchAdminCustomPayments = (params) =>
+  client.get('/payments/admin', { params });
+export const fetchAdminCustomPaymentSummary = () =>
+  client.get('/payments/admin/summary');
+export const fetchAdminCustomPaymentById = (id) =>
+  client.get(`/payments/admin/${id}`);
+export const refreshAdminCustomPaymentStatus = (merchantOrderId) =>
+  client.post(`/payments/admin/${encodeURIComponent(merchantOrderId)}/refresh`);
 
 // ── Customer profile ──────────────────────────────────────────────────────────
 export const getCustomerMe          = ()     => client.get('/customers/me');

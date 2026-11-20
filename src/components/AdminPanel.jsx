@@ -16,6 +16,7 @@ import AdminOrders        from './AdminOrders';
 import AdminDiscounts     from './AdminDiscounts';
 import AdminResellers     from './AdminResellers';
 import AdminReviews       from './AdminReviews';
+import AdminCustomPayments from './AdminCustomPayments';
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -49,6 +50,7 @@ const AdminPanel = () => {
     if (location.pathname.includes('/discounts'))  return 'Discounts Management';
     if (location.pathname.includes('/resellers'))  return 'Resellers Management';
     if (location.pathname.includes('/reviews'))    return 'Reviews Management';
+    if (location.pathname.includes('/custom-payments')) return 'Custom Payments';
     return 'Dashboard Overview';
   };
 
@@ -91,6 +93,12 @@ const AdminPanel = () => {
             className={({ isActive }) => isActive ? 'admin-nav-item active' : 'admin-nav-item'}
           >
             Orders
+          </NavLink>
+          <NavLink
+            to="/admin/custom-payments"
+            className={({ isActive }) => isActive ? 'admin-nav-item active' : 'admin-nav-item'}
+          >
+            Custom Payments
           </NavLink>
           <NavLink
             to="/admin/resellers"
@@ -138,6 +146,7 @@ const AdminPanel = () => {
           <Route path="/categories" element={<AdminCategory />}  />
           <Route path="/discounts"  element={<AdminDiscounts />} />
           <Route path="/orders"     element={<AdminOrders />}    />
+          <Route path="/custom-payments" element={<AdminCustomPayments />} />
           <Route path="/resellers"  element={<AdminResellers />} />
           <Route path="/reviews"    element={<AdminReviews />}   />
         </Routes>
