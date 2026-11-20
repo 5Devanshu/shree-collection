@@ -20,6 +20,10 @@ import SearchPage         from './components/SearchPage';   // ← NEW
 import SessionExpiredBanner from './components/SessionExpiredBanner'; // ← NEW
 import ShippingBanner     from './components/ShippingBanner';
 import ShreeCollection   from './pages/ShreeCollection';
+import CustomPayment     from './components/CustomPayment';
+import PaymentProcessing from './components/PaymentProcessing';
+import CustomPaymentSuccess from './components/CustomPaymentSuccess';
+import PaymentFailed     from './components/PaymentFailed';
 
 // Guard: redirect logged-in resellers away from /reseller/login
 const ResellerGuestRoute = ({ children }) => {
@@ -46,11 +50,25 @@ const GuestRoute = ({ children }) => {
 function AppRoutes() {
   const location = useLocation();
   const isSharePage = location.pathname === '/s/shree-collection';
+  const isCustomPaymentPage =
+    location.pathname === '/pay' || location.pathname.startsWith('/payment/');
 
   if (isSharePage) {
     return (
       <Routes>
         <Route path="/s/shree-collection" element={<ShreeCollection />} />
+      </Routes>
+    );
+  }
+
+  if (isCustomPaymentPage) {
+    return (
+      <Routes>
+        <Route path="/pay" element={<CustomPayment />} />
+        <Route path="/payment/success" element={<CustomPaymentSuccess />} />
+        <Route path="/payment/failed" element={<PaymentFailed />} />
+        <Route path="/payment/processing" element={<PaymentProcessing />} />
+        <Route path="*" element={<Navigate to="/pay" replace />} />
       </Routes>
     );
   }

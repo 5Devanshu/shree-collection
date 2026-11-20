@@ -221,6 +221,12 @@ export const confirmPhonePePayment = (data) =>
 export const checkPhonePePaymentStatus = (merchantOrderId) =>
   client.get(`/checkout/status/${merchantOrderId}`);
 
+// ── Custom payment page — deliberately separate from product checkout ─────────
+export const createCustomPayment = (data) =>
+  client.post('/payments/phonepe/create', data);
+export const checkCustomPaymentStatus = (merchantOrderId) =>
+  client.get(`/payments/phonepe/status/${encodeURIComponent(merchantOrderId)}`);
+
 // ── Customer profile ──────────────────────────────────────────────────────────
 export const getCustomerMe          = ()     => client.get('/customers/me');
 export const updateCustomerMe       = (data) => client.patch('/customers/me', data);
